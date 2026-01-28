@@ -29,16 +29,26 @@ st.set_page_config(
 # GOOGLE EARTH ENGINE INIT
 # ============================================================
 
-@st.cache_resource
-def init_gee():
-    key = json.loads(st.secrets["GEE_SERVICE_ACCOUNT"])
-    creds = ee.ServiceAccountCredentials(
-        key["client_email"], key_data=json.dumps(key)
-    )
-    ee.Initialize(creds)
-    return True
+# ============================================================
+# GOOGLE EARTH ENGINE INIT (SERVICE ACCOUNT - STREAMLIT CLOUD)
+# ============================================================
 
-gee_ok = init_gee()
+import ee
+import streamlit as st
+
+def init_gee():
+    try:
+        if not ee.data._initialized:
+            credentials = ee.ServiceAccountCredentials(
+                st.secrets["GEE_SERVICE_ACCOUNT"]["client_email"],
+                key_data=st.secrets["GEE_SERVICE_ACCOUNT"]
+            )
+            ee.Initialize(credentials)
+    except Exception as e:
+        st.error(f"Erreur initialisation GEE : {e}")
+        st.stop()
+
+init_gee()
 
 # ============================================================
 # UTILITIES

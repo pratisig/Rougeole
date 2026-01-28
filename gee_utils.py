@@ -2,12 +2,16 @@
 import ee
 import geopandas as gpd
 
+@st.cache_resource
 def init_gee():
-    try:
-        ee.Initialize()
-    except:
-        ee.Authenticate()
-        ee.Initialize()
+    key = json.loads(st.secrets["GEE_SERVICE_ACCOUNT"])
+    creds = ee.ServiceAccountCredentials(
+        key["client_email"], key_data=json.dumps(key)
+    )
+    ee.Initialize(creds)
+    return True
+
+gee_ok = init_gee()
 
 def gdf_to_ee(gdf):
     return ee.FeatureCollection(gdf.__geo_interface__)

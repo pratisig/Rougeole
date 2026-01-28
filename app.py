@@ -37,21 +37,24 @@ st.set_page_config(
 # GOOGLE EARTH ENGINE INIT – STREAMLIT CLOUD (SAFE VERSION)
 # ============================================================
 
+import json
 import ee
 import streamlit as st
 
 def init_gee():
     try:
+        key = json.loads(st.secrets["GEE_SERVICE_ACCOUNT"])
         credentials = ee.ServiceAccountCredentials(
-            st.secrets["GEE_SERVICE_ACCOUNT"]["client_email"],
-            key_data=st.secrets["GEE_SERVICE_ACCOUNT"]
+            key["client_email"],
+            key_data=key
         )
         ee.Initialize(credentials)
     except Exception as e:
-        st.error(f"❌ Erreur initialisation Google Earth Engine : {e}")
+        st.error(f"❌ Erreur initialisation GEE : {e}")
         st.stop()
 
 init_gee()
+
 
 
 # ============================================================

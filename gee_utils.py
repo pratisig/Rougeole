@@ -1,4 +1,17 @@
 # gee_utils.py
+import ee
+import geopandas as gpd
+
+def init_gee():
+    try:
+        ee.Initialize()
+    except:
+        ee.Authenticate()
+        ee.Initialize()
+
+def gdf_to_ee(gdf):
+    return ee.FeatureCollection(gdf.__geo_interface__)
+# gee_utils.py
 def worldpop_by_age(ee_fc):
     dataset = ee.ImageCollection("WorldPop/GP/100m/pop_age_sex")
 

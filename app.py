@@ -3,11 +3,8 @@ import pandas as pd
 import numpy as np
 import geopandas as gpd
 from datetime import datetime
-import requests
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.preprocessing import LabelEncoder
-import ee
-import json
 import folium
 import branca.colormap as cm
 from streamlit_folium import st_folium
@@ -17,34 +14,11 @@ st.set_page_config(page_title="Surveillance Rougeole Multi-pays", layout="wide",
 st.title("🦠 Dashboard de Surveillance Prédictive – Rougeole")
 
 # =======================
-# 1. GEE INIT
-# =======================
-@st.cache_resource
-def init_gee():
-    try:
-        key_dict = json.loads(st.secrets["GEE_SERVICE_ACCOUNT"])
-        credentials = ee.ServiceAccountCredentials(
-            key_dict["client_email"],
-            key_data=json.dumps(key_dict)
-        )
-        ee.Initialize(credentials)
-        return True
-    except Exception as e:
-        st.error("Erreur d’authentification Google Earth Engine")
-        st.exception(e)
-        return False
-
-if not init_gee():
-    st.stop()
-
-# =======================
-# 2. Sidebar – Sélections
+# 1. Sidebar – Sélections
 # =======================
 pays_selectionne = st.sidebar.selectbox("Pays", ["Niger","Burkina Faso","Mali"])
-option_aire = st.sidebar.radio("Source Aires de Santé", ["GAUL Admin3 (GEE)","Upload Shapefile/GeoJSON"])
-upload_file = None
-if option_aire=="Upload Shapefile/GeoJSON":
-    upload_file = st.sidebar.file_uploader("Shapefile/GeoJSON", type=["shp","geojson"])
+option_aire = st.sidebar.radio("Source Aires de Santé", ["Upload Shapefile/GeoJSON"])
+upload_file = st.sidebar.file_uploader("Shapefile/GeoJSON", type=["shp","geojson"])
 
 linelist_file = st.sidebar.file_uploader("Linelists CSV", type=["csv"])
 vacc_file = st.sidebar.file_uploader("Vaccination CSV (optionnel)", type=["csv"])
@@ -52,23 +26,19 @@ start_date = st.sidebar.date_input("Date début", datetime(2024,1,1))
 end_date = st.sidebar.date_input("Date fin", datetime.today())
 
 # =======================
-# 3. Aires de santé
+# 2. Aires de santé
 # =======================
-@st.cache_data
-def load_gaul_admin3(pays):
-    return ee.FeatureCollection("FAO/GAUL/2015/level3").filter(ee.Filter.eq("ADM0_NAME", pays))
+if upload_file:
+    sa_gdf = gpd.read_file(upload_file)
+    sa_gdf["ADM3_NAME"] = sa_gdf["ADM3_NAME"].astype(str)
+else:
+    st.warning("Uploader un fichier pour continuer")
+    st.stop()
 
-if option_aire=="GAUL Admin3 (GEE)":
-    gaul_fc = load_gaul_admin3(pays_selectionne)
-elif option_aire=="Upload Shapefile/GeoJSON":
-    if upload_file:
-        sa_gdf = gpd.read_file(upload_file)
-    else:
-        st.warning("Uploader un fichier pour continuer")
-        st.stop()
+aires_list = sa_gdf['ADM3_NAME'].tolist()
 
 # =======================
-# 4. Linelist
+# 3. Linelist
 # =======================
 @st.cache_data
 def generate_dummy_linelists(n=400, aires=[]):
@@ -78,7 +48,7 @@ def generate_dummy_linelists(n=400, aires=[]):
         "ID_Cas": range(1,n+1),
         "Date_Debut_Eruption": dates,
         "Date_Notification": dates + pd.to_timedelta(np.random.randint(1,5,n), unit="D"),
-        "Aire_Sante": np.random.choice(aires,n) if aires else np.random.choice(["Niamey","Maradi"],n),
+        "Aire_Sante": np.random.choice(aires,n),
         "Age_Mois": np.random.randint(6,180,n),
         "Statut_Vaccinal": np.random.choice(["Oui","Non"], n, p=[0.6,0.4])
     })
@@ -86,21 +56,19 @@ def generate_dummy_linelists(n=400, aires=[]):
 if linelist_file:
     df = pd.read_csv(linelist_file, parse_dates=["Date_Debut_Eruption","Date_Notification"])
 else:
-    aires_list = sa_gdf['ADM3_NAME'].tolist() if option_aire=="Upload Shapefile/GeoJSON" else ["Niamey","Maradi","Zinder"]
     df = generate_dummy_linelists(aires=aires_list)
 
 df = df[(df["Date_Debut_Eruption"]>=pd.to_datetime(start_date)) & (df["Date_Debut_Eruption"]<=pd.to_datetime(end_date))]
 df["Semaine"] = df["Date_Debut_Eruption"].dt.to_period("W").astype(str)
 
 # =======================
-# 5. Préparation features
+# 4. Préparation features et prédiction
 # =======================
 weekly_features = df.groupby(["Aire_Sante","Semaine"]).agg(
     Cas_Observes=("ID_Cas","count"),
     Non_Vaccines=("Statut_Vaccinal", lambda x: (x=="Non").mean()*100)
 ).reset_index()
 
-# Population fictive
 weekly_features["Pop_0_4"] = np.random.randint(500,5000,len(weekly_features))
 weekly_features["Urban_Encoded"] = np.random.randint(0,2,len(weekly_features))
 
@@ -136,25 +104,36 @@ risk_df = future_df.groupby("Aire_Sante").agg(
 ).reset_index()
 
 # =======================
-# 6. Carte Folium simplifiée
+# 5. Carte Folium enrichie
 # =======================
 st.subheader("🗺️ Carte – Risque rougeole")
+
 m = folium.Map(location=[15,8], zoom_start=6)
-if option_aire=="Upload Shapefile/GeoJSON":
-    sa_merge = sa_gdf.merge(risk_df,left_on="ADM3_NAME",right_on="Aire_Sante",how="left")
-    colormap = cm.linear.OrRd_09.scale(0, sa_merge["Max_Predicted_Cases"].max())
-    colormap.caption = "Cas rouges sur 12 semaines"
-    colormap.add_to(m)
+sa_merge = sa_gdf.merge(risk_df,left_on="ADM3_NAME",right_on="Aire_Sante",how="left")
+
+colormap = cm.linear.OrRd_09.scale(0, sa_merge["Max_Predicted_Cases"].max())
+colormap.caption = "Cas rouges sur 12 semaines"
+colormap.add_to(m)
+
+for _, row in sa_merge.iterrows():
+    popup_text = f"""
+    <b>{row['ADM3_NAME']}</b><br>
+    Cas Observés: {int(weekly_features[weekly_features['Aire_Sante']==row['ADM3_NAME']]['Cas_Observes'].sum())}<br>
+    Cas Prévus: {int(row['Max_Predicted_Cases'])}<br>
+    % Non vaccinés: {weekly_features[weekly_features['Aire_Sante']==row['ADM3_NAME']]['Non_Vaccines'].mean():.1f}%<br>
+    Population 0-4 ans: {int(weekly_features[weekly_features['Aire_Sante']==row['ADM3_NAME']]['Pop_0_4'].mean())}<br>
+    Semaine de pic: {row['Week_of_Peak']}
+    """
     folium.GeoJson(
-        sa_merge,
-        style_function=lambda f:{'fillColor': colormap(f['properties']['Max_Predicted_Cases']),
-                                'color':'black','weight':1,'fillOpacity':0.7},
-        tooltip=folium.GeoJsonTooltip(fields=["ADM3_NAME","Max_Predicted_Cases","Week_of_Peak"])
+        row['geometry'],
+        style_function=lambda f, color=colormap(row['Max_Predicted_Cases']): {'fillColor': color,'color':'black','weight':1,'fillOpacity':0.7},
+        tooltip=popup_text
     ).add_to(m)
+
 st_folium(m,width=900,height=650)
 
 # =======================
-# 7. Courbes
+# 6. Courbes Observé vs Prévu
 # =======================
 st.subheader("📈 Courbes Observé vs Prévu")
 plot_df = pd.concat([
@@ -167,7 +146,20 @@ st.plotly_chart(fig_obs,use_container_width=True)
 st.plotly_chart(fig_pred,use_container_width=True)
 
 # =======================
-# 8. Tableau KPI
+# 7. KPI – Statistiques
 # =======================
-st.subheader("🚨 Aires de santé – risque maximal")
-st.dataframe(risk_df.sort_values("Max_Predicted_Cases",ascending=False))
+st.subheader("📊 KPI – Indicateurs par Aire de Santé")
+kpi_df = weekly_features.groupby("Aire_Sante").agg(
+    Cas_Observes=("Cas_Observes","sum"),
+    Cas_Prevus=("Aire_Sante", lambda x: int(risk_df[risk_df['Aire_Sante']==x.iloc[0]]['Max_Predicted_Cases'])),
+    Non_Vaccines_Pct=("Non_Vaccines","mean"),
+    Pop_0_4=("Pop_0_4","mean")
+).reset_index()
+kpi_df["Non_Vaccines_Pct"] = kpi_df["Non_Vaccines_Pct"].round(1)
+
+st.dataframe(kpi_df.sort_values("Cas_Prevus",ascending=False))
+
+# Alertes
+alert_df = kpi_df[kpi_df["Cas_Observes"]>=kpi_df["Cas_Observes"].quantile(0.75)]
+st.subheader("🚨 Aires de Santé en Alerte Rouge")
+st.dataframe(alert_df)

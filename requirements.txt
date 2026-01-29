@@ -1,12 +1,3 @@
-streamlit
-# Force une version de geemap stable
-geemap>=0.20.0
-earthengine-api
-pandas
-geopandas
-plotly
-scikit-learn
-folium
-streamlit-folium
-# C'EST LA LIGNE QUI CORRIGE VOTRE ERREUR :
-python-box==6.1.0
+# 1. Installer les dépendances
+streamlit pandas numpy geopandas scikit-learn earthengine-api geemap folium streamlit-folium plotly openpyxl branca
+

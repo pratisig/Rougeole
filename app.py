@@ -155,7 +155,33 @@ else:
 def ee_fc_to_gdf_safe(_fc):
     """Convertir FeatureCollection GEE en GeoDataFrame"""
     try:
-        gdf = geemap.ee_to_geopandas(_fc)
+        # Extraction manuelle sans geemap
+        features_info = _fc.limit(200).getInfo()
+        
+        if not features_info or 'features' not in features_info:
+            raise ValueError("Aucune donnée retournée par GEE")
+        
+        features_list = features_info['features']
+        
+        geometries = []
+        properties_list = []
+        
+        for feat in features_list:
+            try:
+                geom_dict = feat['geometry']
+                props = feat['properties']
+                
+                # Utiliser shapely pour convertir
+                geom = shape(geom_dict)
+                geometries.append(geom)
+                properties_list.append(props)
+            except:
+                continue
+        
+        if not geometries:
+            raise ValueError("Aucune géométrie valide")
+        
+        gdf = gpd.GeoDataFrame(properties_list, geometry=geometries, crs="EPSG:4326")
         
         # Standardisation des noms de colonnes
         if "ADM3_NAME" not in gdf.columns:
@@ -309,15 +335,35 @@ def worldpop_children_stats(_sa_gdf, use_gee):
         })
     
     try:
-        fc = geemap.geopandas_to_ee(_sa_gdf)
+        # Convertir GeoDataFrame en FeatureCollection manuellement
+        features = []
+        for idx, row in _sa_gdf.iterrows():
+            geom = row['geometry']
+            props = {"ADM3_NAME": row["ADM3_NAME"]}
+            
+            # Convertir la géométrie en format GEE
+            if geom.geom_type == 'Polygon':
+                coords = [[[x, y] for x, y in geom.exterior.coords]]
+                ee_geom = ee.Geometry.Polygon(coords)
+            elif geom.geom_type == 'MultiPolygon':
+                coords = []
+                for poly in geom.geoms:
+                    coords.append([[[x, y] for x, y in poly.exterior.coords]])
+                ee_geom = ee.Geometry.MultiPolygon(coords)
+            else:
+                continue
+            
+            features.append(ee.Feature(ee_geom, props))
+        
+        fc = ee.FeatureCollection(features)
         
         # WorldPop par âge
         bands_age = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"]
-        pop = ee.ImageCollection("WorldPop/GP/100m/pop_age_sex_cons_unadj").mosaic()
+        pop = ee.ImageCollection("WorldPop/GP/100m/pop_age_sex").mosaic()
         
         # Sélectionner les bandes enfants
-        male_bands = [f"population_m_{b}" for b in bands_age if f"population_m_{b}" in pop.bandNames().getInfo()]
-        female_bands = [f"population_f_{b}" for b in bands_age if f"population_f_{b}" in pop.bandNames().getInfo()]
+        male_bands = [f"M{b}" for b in bands_age[:5]]
+        female_bands = [f"F{b}" for b in bands_age[:5]]
         
         pop_children = pop.select(male_bands + female_bands)
         
@@ -327,14 +373,20 @@ def worldpop_children_stats(_sa_gdf, use_gee):
             scale=100
         )
         
-        gdf = geemap.ee_to_geopandas(stats)
+        # Convertir manuellement
+        stats_info = stats.getInfo()
         
-        # Calculer population totale
-        pop_cols = [col for col in gdf.columns if col.startswith("population_")]
-        gdf["Pop_Moins_15"] = gdf[pop_cols].sum(axis=1)
-        gdf["Pop_Totale"] = gdf["Pop_Moins_15"] * 2.2  # Estimation
+        data_list = []
+        for feat in stats_info['features']:
+            props = feat['properties']
+            pop_sum = sum([props.get(band, 0) for band in male_bands + female_bands])
+            data_list.append({
+                "ADM3_NAME": props.get("ADM3_NAME", ""),
+                "Pop_Moins_15": pop_sum,
+                "Pop_Totale": pop_sum * 2.2
+            })
         
-        return gdf[["ADM3_NAME", "Pop_Totale", "Pop_Moins_15"]]
+        return pd.DataFrame(data_list)
         
     except Exception as e:
         st.sidebar.warning(f"⚠️ WorldPop indisponible: {e}")
@@ -361,7 +413,27 @@ def urban_classification(_sa_gdf, use_gee):
         })
     
     try:
-        fc = geemap.geopandas_to_ee(_sa_gdf)
+        # Convertir GeoDataFrame en FeatureCollection manuellement
+        features = []
+        for idx, row in _sa_gdf.iterrows():
+            geom = row['geometry']
+            props = {"ADM3_NAME": row["ADM3_NAME"]}
+            
+            # Convertir la géométrie en format GEE
+            if geom.geom_type == 'Polygon':
+                coords = [[[x, y] for x, y in geom.exterior.coords]]
+                ee_geom = ee.Geometry.Polygon(coords)
+            elif geom.geom_type == 'MultiPolygon':
+                coords = []
+                for poly in geom.geoms:
+                    coords.append([[[x, y] for x, y in poly.exterior.coords]])
+                ee_geom = ee.Geometry.MultiPolygon(coords)
+            else:
+                continue
+            
+            features.append(ee.Feature(ee_geom, props))
+        
+        fc = ee.FeatureCollection(features)
         smod = ee.Image("JRC/GHSL/P2023A/GHS_SMOD/2020")
         
         def classify(feature):
@@ -382,9 +454,19 @@ def urban_classification(_sa_gdf, use_gee):
             return feature.set({"Urbanisation": urbanisation})
         
         urban_fc = fc.map(classify)
-        urban_gdf = geemap.ee_to_geopandas(urban_fc)
         
-        return urban_gdf[["ADM3_NAME", "Urbanisation"]]
+        # Convertir manuellement
+        urban_info = urban_fc.getInfo()
+        
+        data_list = []
+        for feat in urban_info['features']:
+            props = feat['properties']
+            data_list.append({
+                "ADM3_NAME": props.get("ADM3_NAME", ""),
+                "Urbanisation": props.get("Urbanisation", "Rural")
+            })
+        
+        return pd.DataFrame(data_list)
         
     except Exception as e:
         st.sidebar.warning(f"⚠️ GHSL indisponible: {e}")

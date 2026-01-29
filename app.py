@@ -182,6 +182,123 @@ def fetch_climate_nasa_power(lat,lon,start_date,end_date):
         "humidity": [p.get("RH2M",{}).get(d,np.nan) for d in dates]
     })
     return dfc
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.preprocessing import LabelEncoder
+
+# =========================
+# 1. Préparer les features pour la prédiction
+# =========================
+
+# Fusionner toutes les variables par aire de santé et semaine
+weekly_features = df.groupby(["Aire_Sante", "Semaine"]).agg(
+    Cas_Observes=("ID_Cas", "count"),
+    Non_Vaccines=("Statut_Vaccinal", lambda x: (x == "Non").mean()*100)
+).reset_index()
+
+weekly_features = weekly_features.merge(pop_df, on="Aire_Sante", how="left")
+weekly_features = weekly_features.merge(urban_df, on="Aire_Sante", how="left")
+weekly_features = weekly_features.merge(climate_df[["Aire_Sante","Coef_Climatique"]], on="Aire_Sante", how="left")
+weekly_features = weekly_features.merge(vacc, on="Aire_Sante", how="left")
+
+# Encoder les variables catégorielles
+le_urban = LabelEncoder()
+weekly_features["Urban_Encoded"] = le_urban.fit_transform(weekly_features["Urbanisation"].astype(str))
+
+# Features utilisées pour prédiction
+feature_cols = ["Cas_Observes", "Non_Vaccines", "Pop_Totale", "Urban_Encoded", "Coef_Climatique"]
+X = weekly_features[feature_cols]
+y = weekly_features["Cas_Observes"]  # ou Cas_Ajustes si you use nowcasting
+
+# =========================
+# 2. Entraîner le modèle
+# =========================
+model = GradientBoostingRegressor(n_estimators=200, learning_rate=0.1, max_depth=3, random_state=42)
+model.fit(X, y)
+
+# =========================
+# 3. Générer les prédictions pour 12 semaines à venir
+# =========================
+
+future_weeks = []
+n_weeks = 12
+latest_week_idx = len(weekly_features["Semaine"].unique())
+
+for aire in weekly_features["Aire_Sante"].unique():
+    aire_row = weekly_features[weekly_features["Aire_Sante"]==aire].iloc[-1]
+    for i in range(1, n_weeks+1):
+        future_weeks.append({
+            "Aire_Sante": aire,
+            "Semaine": f"Week_{latest_week_idx+i}",
+            "Cas_Observes": aire_row["Cas_Observes"],  # tendance initiale
+            "Non_Vaccines": aire_row["Non_Vaccines"],
+            "Pop_Totale": aire_row["Pop_Totale"],
+            "Urban_Encoded": aire_row["Urban_Encoded"],
+            "Coef_Climatique": aire_row["Coef_Climatique"]
+        })
+
+future_df = pd.DataFrame(future_weeks)
+future_df["Predicted_Cases"] = model.predict(future_df[feature_cols])
+
+# =========================
+# 4. Classement du risque par aire (max des 12 semaines)
+# =========================
+risk_df = future_df.groupby("Aire_Sante").agg(
+    Max_Predicted_Cases=("Predicted_Cases", "max"),
+    Week_of_Peak=("Predicted_Cases", lambda x: future_df.loc[x.idxmax(),"Semaine"])
+).reset_index()
+
+# =========================
+# 5. Visualisation – Carte interactive
+# =========================
+import folium
+
+# Créer carte centrée sur le Niger
+m = folium.Map(location=[17.5, 8], zoom_start=6)
+
+# Fusionner avec géométrie
+sa_gdf = sa_gdf.merge(risk_df, left_on="ADM3_NAME", right_on="Aire_Sante", how="left")
+
+# Colorer selon Max_Predicted_Cases
+import branca.colormap as cm
+
+max_cases = sa_gdf["Max_Predicted_Cases"].max()
+colormap = cm.linear.OrRd_09.scale(0, max_cases)
+colormap.caption = "Cas rouges prévus sur 12 semaines"
+colormap.add_to(m)
+
+folium.GeoJson(
+    sa_gdf,
+    style_function=lambda feature: {
+        'fillColor': colormap(feature['properties']['Max_Predicted_Cases']),
+        'color':'black',
+        'weight':1,
+        'fillOpacity':0.7
+    },
+    tooltip=folium.GeoJsonTooltip(fields=["ADM3_NAME","Max_Predicted_Cases","Week_of_Peak"])
+).add_to(m)
+
+# Affichage dans Streamlit
+st.subheader("🗺️ Carte des aires de santé – risque de rougeole")
+st.components.v1.html(m._repr_html_(), height=600)
+
+# =========================
+# 6. Courbes épidémiques prédites
+# =========================
+st.subheader("📈 Courbes épidémiques – Observé vs Prévu")
+plot_df = future_df.copy()
+plot_df = plot_df.rename(columns={"Predicted_Cases":"Cas_Prevus"})
+plot_df = pd.concat([weekly_features[["Semaine","Cas_Observes","Aire_Sante"]], plot_df[["Semaine","Cas_Prevus","Aire_Sante"]]], axis=0)
+
+fig = px.line(plot_df, x="Semaine", y="Cas_Observes", color="Aire_Sante", labels={"Cas_Observes":"Cas Observés"})
+fig2 = px.line(plot_df, x="Semaine", y="Cas_Prevus", color="Aire_Sante", labels={"Cas_Prevus":"Cas Prévus"})
+st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig2, use_container_width=True)
+
+# =========================
+# 7. Tableau des aires les plus à risque
+# =========================
+st.subheader("🚨 Aires de santé – risque maximal sur 12 semaines")
+st.dataframe(risk_df.sort_values("Max_Predicted_Cases", ascending=False))
 
 # ============================================================
 # 8. PRÉPARATION TABLEAU DE BORD

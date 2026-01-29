@@ -18,12 +18,13 @@ import ee
 import json
 import folium
 from folium.plugins import HeatMap
-import geemap.foliumap as geemap
 from streamlit_folium import st_folium
 import plotly.express as px
 import plotly.graph_objects as go
 from io import BytesIO
 import zipfile
+import tempfile
+import os
 
 # ============================================================
 # CONFIG STREAMLIT
@@ -210,10 +211,19 @@ def load_health_areas(option, upload_file, country, use_gee):
         
         try:
             if upload_file.name.endswith('.zip'):
-                with zipfile.ZipFile(upload_file) as z:
-                    z.extractall("/tmp/shp")
-                    shp_files = [f for f in z.namelist() if f.endswith('.shp')]
-                    gdf = gpd.read_file(f"/tmp/shp/{shp_files[0]}")
+                # Créer un dossier temporaire
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    zip_path = os.path.join(tmpdir, 'upload.zip')
+                    with open(zip_path, 'wb') as f:
+                        f.write(upload_file.getvalue())
+                    
+                    with zipfile.ZipFile(zip_path, 'r') as z:
+                        z.extractall(tmpdir)
+                        shp_files = [f for f in os.listdir(tmpdir) if f.endswith('.shp')]
+                        if shp_files:
+                            gdf = gpd.read_file(os.path.join(tmpdir, shp_files[0]))
+                        else:
+                            raise ValueError("Aucun fichier .shp trouvé dans le ZIP")
             else:
                 gdf = gpd.read_file(upload_file)
             
@@ -223,6 +233,8 @@ def load_health_areas(option, upload_file, country, use_gee):
                     gdf["ADM3_NAME"] = gdf["name"]
                 elif "NAME" in gdf.columns:
                     gdf["ADM3_NAME"] = gdf["NAME"]
+                elif "nom" in gdf.columns:
+                    gdf["ADM3_NAME"] = gdf["nom"]
                 else:
                     gdf["ADM3_NAME"] = [f"Aire_{i}" for i in range(len(gdf))]
             
@@ -241,35 +253,42 @@ def load_health_areas(option, upload_file, country, use_gee):
             fc = ee.FeatureCollection("FAO/GAUL/2015/level2") \
                    .filter(ee.Filter.eq("ADM0_NAME", country))
             
-            # CORRECTION: Ne pas passer fc directement au cache
-            # Extraire d'abord les features
-            features_list = fc.getInfo()['features']
+            # Extraire les features sans geemap
+            features_info = fc.limit(100).getInfo()  # Limiter pour éviter timeout
             
-            # Créer le GeoDataFrame à partir des features
+            if not features_info or 'features' not in features_info:
+                raise ValueError("Aucune donnée retournée par GEE")
+            
+            features_list = features_info['features']
+            
+            # Convertir en GeoDataFrame manuellement
+            from shapely.geometry import shape
+            
             geometries = []
             properties_list = []
             
             for feat in features_list:
-                geom = feat['geometry']
-                props = feat['properties']
-                
-                # Convertir la géométrie GEE en Shapely
-                if geom['type'] == 'Polygon':
-                    from shapely.geometry import Polygon
-                    coords = geom['coordinates'][0]
-                    geometries.append(Polygon(coords))
-                elif geom['type'] == 'MultiPolygon':
-                    from shapely.geometry import MultiPolygon, Polygon
-                    polys = [Polygon(p[0]) for p in geom['coordinates']]
-                    geometries.append(MultiPolygon(polys))
-                
-                properties_list.append(props)
+                try:
+                    geom_dict = feat['geometry']
+                    props = feat['properties']
+                    
+                    # Utiliser shapely.geometry.shape pour convertir
+                    geom = shape(geom_dict)
+                    geometries.append(geom)
+                    properties_list.append(props)
+                except Exception as e:
+                    continue
+            
+            if not geometries:
+                raise ValueError("Aucune géométrie valide extraite")
             
             gdf = gpd.GeoDataFrame(properties_list, geometry=geometries, crs="EPSG:4326")
             
             # Standardiser les colonnes
             if "ADM2_NAME" in gdf.columns:
                 gdf["ADM3_NAME"] = gdf["ADM2_NAME"]
+            elif "ADM1_NAME" in gdf.columns:
+                gdf["ADM3_NAME"] = gdf["ADM1_NAME"]
             
             st.success(f"✓ {len(gdf)} aires de santé chargées depuis GEE")
             return gdf

@@ -25,49 +25,24 @@ st.set_page_config(
     page_icon="🧠"
 )
 
-# ============================================================
-# GOOGLE EARTH ENGINE INIT
-# ============================================================
-
-# ============================================================
-# GOOGLE EARTH ENGINE INIT (SERVICE ACCOUNT - STREAMLIT CLOUD)
-# ============================================================
-
-# ============================================================
-# GOOGLE EARTH ENGINE INIT – STREAMLIT CLOUD (SAFE VERSION)
-# ============================================================
-
-import ee
-import streamlit as st
-import json
-
+@st.cache_resource
 def init_gee():
+    import json
+    import ee
+
     try:
-        sa = st.secrets["GEE_SERVICE_ACCOUNT"]
-
-        # Cas 1 : secret est une STRING ('''{json}''')
-        if isinstance(sa, str):
-            key = json.loads(sa)
-
-        # Cas 2 : secret est déjà un dict (TOML natif)
-        elif isinstance(sa, dict):
-            key = sa
-
-        else:
-            raise ValueError("Format du secret GEE_SERVICE_ACCOUNT invalide")
-
+        key_dict = json.loads(st.secrets["GEE_SERVICE_ACCOUNT"])
         credentials = ee.ServiceAccountCredentials(
-            key["client_email"],
-            key_data=key
+            key_dict["client_email"],
+            key_data=json.dumps(key_dict)
         )
-
         ee.Initialize(credentials)
-
+        return True
     except Exception as e:
-        st.error(f"❌ Erreur initialisation Google Earth Engine : {e}")
-        st.stop()
+        st.error("Erreur d’authentification Google Earth Engine")
+        st.exception(e)
+        return False
 
-init_gee()
 
 
 # ============================================================

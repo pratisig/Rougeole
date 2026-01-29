@@ -18,43 +18,75 @@ import plotly.express as px
 # ============================================================
 st.set_page_config(page_title="Measles Predict PRO", layout="wide", page_icon="🦠")
 
+import io
+
 @st.cache_resource
 def init_gee():
     try:
-        # Priorité aux secrets Streamlit
         if "GEE_SERVICE_ACCOUNT" in st.secrets:
             key_dict = json.loads(st.secrets["GEE_SERVICE_ACCOUNT"])
+            # On récupère l'ID du projet (souvent obligatoire maintenant)
+            project_id = key_dict.get("project_id") or st.secrets.get("GEE_PROJECT_ID")
+            
             credentials = ee.ServiceAccountCredentials(
-                key_dict["client_email"], key_data=json.dumps(key_dict)
+                key_dict["client_email"], 
+                key_data=json.dumps(key_dict)
             )
-            ee.Initialize(credentials)
+            ee.Initialize(credentials, project=project_id)
         else:
-            ee.Initialize() # Local
+            ee.Initialize()
         return True
     except Exception as e:
-        st.error(f"Erreur GEE : {e}")
+        st.error(f"Erreur d'initialisation : {e}")
         return False
-
-if not init_gee(): st.stop()
-
-# ============================================================
-# 1. FONCTIONS GEE OPTIMISÉES (SANS BOUCLES LENTES)
-# ============================================================
 
 @st.cache_data
 def get_socio_demo_stats(gdf_json):
-    """
-    Calcule Pop et Urbanisme en UNE SEULE FOIS pour éviter le lag.
-    """
-    # Conversion du GeoJSON string en FeatureCollection
-    gdf = gpd.GeoDataFrame.from_features(json.loads(gdf_json))
-    fc = ee.FeatureCollection(json.loads(gdf_json))
+    """Calcule Pop et Urbanisme avec optimisation de payload"""
+    try:
+        # 1. Recharger le GeoDataFrame
+        gdf = gpd.read_file(io.StringIO(gdf_json))
+        
+        # 2. SIMPLIFICATION : Réduit le poids du fichier envoyé à Google
+        # tolerance=0.001 réduit les points inutiles (environ 100m de précision)
+        gdf['geometry'] = gdf['geometry'].simplify(tolerance=0.001, preserve_topology=True)
+        
+        # 3. Conversion GEE
+        fc = geemap.gdf_to_ee(gdf)
 
-    # A. POPULATION 0-4 ANS (WorldPop)
-    pop = ee.ImageCollection("WorldPop/GP/100m/pop_age_sex").mosaic()
-    bands = [f"M_{i}" for i in range(5)] + [f"F_{i}" for i in range(5)]
-    # On somme les bandes AVANT de réduire pour avoir un seul chiffre par polygone
-    pop_total_04 = pop.select(bands).reduce(ee.Reducer.sum())
+        # Données WorldPop (Vérification des noms de bandes)
+        pop = ee.ImageCollection("WorldPop/GP/100m/pop_age_sex").mosaic()
+        # Note : On utilise les noms de bandes officiels (M_0, M_1...)
+        bands = [f"M_{i}" for i in range(5)] + [f"F_{i}" for i in range(5)]
+        pop_total_04 = pop.select(bands).reduce(ee.Reducer.sum())
+
+        urban = ee.Image("JRC/GHSL/P2023A/GHS_SMOD_V2-0/2020").select('smod_code')
+
+        # 4. Calcul spatial
+        combined_img = pop_total_04.addBands(urban)
+        stats = combined_img.reduceRegions(
+            collection=fc,
+            reducer=ee.Reducer.mean(),
+            scale=100
+        )
+
+        # 5. OPTIMISATION CRUCIALE : Ne ramener QUE les données (pas la géométrie)
+        # On ne garde que les colonnes utiles pour alléger le transfert
+        stats_no_geom = stats.select(['Aire_Sante', 'sum', 'smod_code'], retainGeometry=False)
+        
+        # 6. Récupération des données
+        features = stats_no_geom.getInfo()['features']
+        data = [f['properties'] for f in features]
+        
+        df_gee = pd.DataFrame(data)
+        df_gee = df_gee.rename(columns={'sum': 'Pop_04_ans', 'smod_code': 'urban_code'})
+        
+        return df_gee
+        
+    except Exception as e:
+        st.error(f"Erreur lors de l'extraction GEE : {e}")
+        # Retourne un DataFrame vide avec les colonnes pour ne pas casser le ML
+        return pd.DataFrame(columns=['Aire_Sante', 'Pop_04_ans', 'urban_code'])
 
     # B. URBANISATION (GHSL)
     urban = ee.Image("JRC/GHSL/P2023A/GHS_SMOD_V2-0/2020")

@@ -344,10 +344,10 @@ if linelist_file:
         st.success(f"✓ {len(df)} cas chargés depuis le fichier")
     except Exception as e:
         st.error(f"Erreur de lecture du fichier: {e}")
-        df = generate_dummy_linelists(sa_gdf, start_date=start_date, end_date=end_date)
+        df = generate_dummy_linelists(sa_gdf, start=start_date, end=end_date)
 else:
     st.info("📊 Aucun linelist fourni – données simulées utilisées")
-    df = generate_dummy_linelists(sa_gdf, start_date=start_date, end_date=end_date)
+    df = generate_dummy_linelists(sa_gdf, start=start_date, end=end_date)
 
 # Filtre temporel
 df = df[

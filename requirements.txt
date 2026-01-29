@@ -1,3 +1,14 @@
 # 1. Installer les dépendances
-streamlit pandas numpy geopandas scikit-learn earthengine-api geemap folium streamlit-folium plotly openpyxl branca
+streamlit 
+pandas 
+numpy 
+geopandas 
+scikit-learn 
+earthengine-api 
+geemap
+folium 
+streamlit-folium 
+plotly 
+openpyxl 
+branca
 

@@ -182,36 +182,67 @@ future_X = pd.DataFrame({
 future_preds = model.predict(future_X)
 
 # =============================================================================
-# 10. VISUALISATION FOLIUM
+# 10. VISUALISATION FOLIUM – AVEC KPI DYNAMIQUES
 # =============================================================================
-st.subheader("🌍 Carte interactive – Alerte Rouge")
+st.subheader("🌍 Carte interactive – Aires de santé & KPI")
 
-m = folium.Map(location=[sa_gdf.geometry.centroid.y.mean(), sa_gdf.geometry.centroid.x.mean()], zoom_start=6, tiles="cartodbpositron")
+# Centre de la carte
+m = folium.Map(location=[sa_gdf.geometry.centroid.y.mean(), sa_gdf.geometry.centroid.x.mean()],
+               zoom_start=6, tiles="cartodbpositron")
 
+# Préparer le dataframe par aire de santé
+kpi_df = alert.groupby("Aire_Sante").agg(
+    Cas=("Cas","sum"),
+    Non_Vaccines=("Non_Vaccines","mean")
+).reset_index()
+
+# Fusion avec population, urbanisation, vaccination
+kpi_df = kpi_df.merge(pop_df, on="Aire_Sante", how="left")
+kpi_df = kpi_df.merge(urban_df, on="Aire_Sante", how="left")
+kpi_df = kpi_df.merge(vacc, on="Aire_Sante", how="left")
+
+# Ajouter Alerte
+kpi_df["Alerte_Rouge"] = (kpi_df["Cas"]>=3) & (kpi_df["Non_Vaccines"]>40)
+
+# Fonction pour couleur popup / style
 def style_function(feature):
-    aire = feature["properties"]["ADM3_NAME"]
-    is_alert = alert[alert["Aire_Sante"]==aire]["Alerte_Rouge"].any()
-    return {
-        "fillOpacity":0.6,
-        "weight":1,
-        "color":"black",
-        "fillColor":"red" if is_alert else "green"
-    }
+    aire = feature["ADM3_NAME"]
+    row = kpi_df[kpi_df["Aire_Sante"]==aire]
+    if not row.empty and row["Alerte_Rouge"].iloc[0]:
+        fillColor = "red"
+    else:
+        fillColor = "green"
+    return {"fillOpacity":0.6, "weight":1, "color":"black", "fillColor":fillColor}
 
-tooltip_fields = ["ADM3_NAME"]
-tooltip_aliases = ["Aire de Santé : "]
+# Fonction pour popup HTML
+def popup_html(aire):
+    row = kpi_df[kpi_df["Aire_Sante"]==aire]
+    if row.empty:
+        return f"<b>{aire}</b><br>Pas de données"
+    r = row.iloc[0]
+    html = f"""
+    <b>{aire}</b><br>
+    Cas observés : {int(r['Cas'])}<br>
+    Non-vaccinés : {r['Non_Vaccines']:.1f}%<br>
+    Pop 0-9 ans : {int(r['Pop_0_9'])}<br>
+    Urbanisation : {r['Urbanisation']}<br>
+    Couverture vaccinale : {r['Couverture_Vaccinale'] if not pd.isna(r['Couverture_Vaccinale']) else 'N/A'}<br>
+    <b>Alerte rouge :</b> {"⚠️ Oui" if r['Alerte_Rouge'] else "Non"}
+    """
+    color = "red" if r["Alerte_Rouge"] else "green"
+    return f'<div style="background-color:{color};padding:5px;border-radius:5px">{html}</div>'
 
-folium.GeoJson(
-    sa_gdf,
-    style_function=style_function,
-    tooltip=GeoJsonTooltip(
-        fields=tooltip_fields,
-        aliases=tooltip_aliases,
-        localize=True
-    )
-).add_to(m)
+# Ajouter les aires de santé sur la carte
+for _, row in sa_gdf.iterrows():
+    aire = row["ADM3_NAME"]
+    geojson = folium.GeoJson(row["geometry"], 
+                             style_function=style_function)
+    folium.Popup(popup_html(aire), max_width=300).add_to(geojson)
+    geojson.add_to(m)
 
-st_folium(m, width=800, height=600)
+# Affichage
+st_folium(m, width=900, height=650)
+
 
 # =============================================================================
 # 11. KPI & GRAPHIQUES

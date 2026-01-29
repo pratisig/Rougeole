@@ -152,10 +152,10 @@ else:
 # ============================================================
 
 @st.cache_data
-def ee_fc_to_gdf_safe(fc):
+def ee_fc_to_gdf_safe(_fc):
     """Convertir FeatureCollection GEE en GeoDataFrame"""
     try:
-        gdf = geemap.ee_to_geopandas(fc)
+        gdf = geemap.ee_to_geopandas(_fc)
         
         # Standardisation des noms de colonnes
         if "ADM3_NAME" not in gdf.columns:
@@ -243,7 +243,7 @@ with st.spinner("🔄 Chargement des aires de santé..."):
 # ============================================================
 
 @st.cache_data
-def generate_dummy_linelists(sa_gdf, n=500, start=None, end=None):
+def generate_dummy_linelists(_sa_gdf, n=500, start=None, end=None):
     """Génère des linelists réalistes pour tests"""
     np.random.seed(42)
     
@@ -265,7 +265,7 @@ def generate_dummy_linelists(sa_gdf, n=500, start=None, end=None):
         "Date_Notification": dates + pd.to_timedelta(
             np.random.poisson(3, n), unit="D"
         ),
-        "Aire_Sante": np.random.choice(sa_gdf["ADM3_NAME"].unique(), n),
+        "Aire_Sante": np.random.choice(_sa_gdf["ADM3_NAME"].unique(), n),
         "Age_Mois": np.random.gamma(shape=2, scale=30, size=n).clip(6, 180).astype(int),
         "Statut_Vaccinal": np.random.choice(["Oui", "Non"], n, p=[0.55, 0.45]),
         "Sexe": np.random.choice(["M", "F"], n),

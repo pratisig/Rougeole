@@ -91,18 +91,10 @@ st.markdown("### Analyse épidémiologique et modélisation prédictive par sema
 # MAPPING PAYS -> ISO3
 # ============================================================
 PAYS_ISO3_MAP = {
-    "Niger": "NER",
-    "Burkina Faso": "BFA",
-    "Mali": "MLI",
-    "Sénégal": "SEN",
-    "Tchad": "TCD",
-    "Bénin": "BEN",
-    "Togo": "TGO",
-    "Côte d'Ivoire": "CIV",
-    "Ghana": "GHA",
-    "Nigeria": "NGA",
-    "Guinée": "GIN",
-    "Mauritanie": "MRT"
+    "Niger": "ner",
+    "Burkina Faso": "bfa",
+    "Mali": "mli",
+    "Mauritanie": "mrt"
 }
 
 # ============================================================

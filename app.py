@@ -548,10 +548,10 @@ st.sidebar.info(f"📅 Dernière semaine: **S{derniere_semaine_epi}** ({derniere
 
 @st.cache_data
 def worldpop_children_stats(_sa_gdf, use_gee):
-    """
-    Extraction des statistiques WorldPop avec la logique correcte
-    Retourne: garçons, filles, population totale, enfants
-    """
+    #"""
+    #Extraction des statistiques WorldPop avec la logique correcte
+    #Retourne: garçons, filles, population totale, enfants
+    #"""
     if not use_gee:
         st.sidebar.warning("⚠️ WorldPop: GEE indisponible")
         return pd.DataFrame({

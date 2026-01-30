@@ -552,7 +552,7 @@ def worldpop_children_stats(_sa_gdf, use_gee):
     #Extraction des statistiques WorldPop avec la logique correcte
     #Retourne: garçons, filles, population totale, enfants
     #"""
-    if not use_gee:
+        if not use_gee:
         st.sidebar.warning("⚠️ WorldPop: GEE indisponible")
         return pd.DataFrame({
             "health_area": _sa_gdf["health_area"],

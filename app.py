@@ -1279,27 +1279,94 @@ if st.button("🚀 Lancer la modélisation prédictive", type="primary"):
             st.plotly_chart(fig_heat, use_container_width=True)
             
         # Carte des prédictions
-        st.subheader("🗺️ Carte du Risque Prévisionnel")
-        sa_gdf_pred = sa_gdf.merge(resultats_finaux, left_on="health_area", right_on="Aire_Sante")
-        
-        m_pred = folium.Map(location=[center_lat, center_lon], zoom_start=6, tiles="CartoDB positron")
-        
-        def get_color_risk(risk):
-            if "Élevé" in risk: return "#d32f2f"
-            if "Modéré" in risk: return "#ef6c00"
-            return "#2e7d32"
-            
-        for idx, row in sa_gdf_pred.iterrows():
-            folium.GeoJson(
-                row['geometry'],
-                style_function=lambda x, color=get_color_risk(row['Niveau_Risque']): {
-                    'fillColor': color,
-                    'color': 'black',
-                    'weight': 0.5,
-                    'fillOpacity': 0.6
-                },
-                tooltip=folium.Tooltip(f"<b>{row['health_area']}</b><br>Risque: {row['Niveau_Risque']}<br>Pic prévu: {row['Pic_Prevu']:.1f} cas")
-            ).add_to(m_pred)
+        st.subheader("🗺️ Carte des Prédictions")
+
+sa_gdf_pred = sa_gdf_enrichi.merge(
+    risk_df,
+    left_on="health_area",
+    right_on="Aire_Sante",
+    how="left"
+)
+
+sa_gdf_pred["Variation_Pct"] = sa_gdf_pred["Variation_Pct"].fillna(0)
+sa_gdf_pred["Cas_Predits_Max"] = sa_gdf_pred["Cas_Predits_Max"].fillna(0)
+
+m_pred = folium.Map(
+    location=[center_lat, center_lon],
+    zoom_start=6,
+    tiles="CartoDB positron"
+)
+
+max_var = max(abs(sa_gdf_pred["Variation_Pct"].min()), abs(sa_gdf_pred["Variation_Pct"].max()))
+
+colormap_pred = cm.LinearColormap(
+    colors=['#2e7d32', '#81c784', '#e0e0e0', '#ff9800', '#d32f2f'],
+    vmin=-max_var,
+    vmax=max_var,
+    caption="Variation (%) par rapport à la moyenne"
+)
+colormap_pred.add_to(m_pred)
+
+for idx, row in sa_gdf_pred.iterrows():
+    aire_name = row['health_area']
+    
+    # Vérifier que les colonnes existent avec get() pour éviter KeyError
+    variation_pct = row.get('Variation_Pct', 0)
+    moy_historique = row.get('Moyenne_Historique', 0)
+    cas_pred_moy = row.get('Cas_Predits_Moyen', 0)
+    cas_pred_max = row.get('Cas_Predits_Max', 0)
+    semaine_pic = row.get('Semaine_Pic', 'N/A')
+    categorie = row.get('Categorie_Variation', 'N/A')
+    
+    popup_html = f"""
+    <div style="font-family: Arial; width: 360px;">
+        <h3 style="color: #1976d2; border-bottom: 2px solid #1976d2;">
+            {aire_name}
+        </h3>
+        <div style="background-color: {'#ffebee' if variation_pct >= seuil_hausse else '#e8f5e9' if variation_pct <= -seuil_baisse else '#f5f5f5'}; padding: 10px; margin: 10px 0; border-radius: 5px;">
+            <h4 style="margin: 0;">🔮 Prédictions</h4>
+            <table style="width: 100%; margin-top: 5px;">
+                <tr><td><b>Moyenne historique:</b></td><td style="text-align: right;">
+                    {moy_historique:.1f} cas/sem
+                </td></tr>
+                <tr><td><b>Moyenne prédite:</b></td><td style="text-align: right;">
+                    {cas_pred_moy:.1f} cas/sem
+                </td></tr>
+                <tr><td><b>Variation:</b></td><td style="text-align: right; font-size: 18px; color: {'#d32f2f' if variation_pct >= seuil_hausse else '#2e7d32' if variation_pct <= -seuil_baisse else '#000'};">
+                    <b>{variation_pct:+.1f}%</b>
+                </td></tr>
+                <tr><td>Tendance:</td><td style="text-align: right;">
+                    <b>{categorie}</b>
+                </td></tr>
+                <tr><td>Semaine du pic:</td><td style="text-align: right;">
+                    {semaine_pic}
+                </td></tr>
+                <tr><td>Pic maximal:</td><td style="text-align: right;">
+                    {int(cas_pred_max)} cas
+                </td></tr>
+            </table>
+        </div>
+    </div>
+    """
+    
+    fill_color = colormap_pred(variation_pct) if pd.notna(variation_pct) else '#e0e0e0'
+    
+    folium.GeoJson(
+        row['geometry'],
+        style_function=lambda x, color=fill_color: {
+            'fillColor': color,
+            'color': 'black',
+            'weight': 0.5,
+            'fillOpacity': 0.7
+        },
+        tooltip=folium.Tooltip(
+            f"<b>{aire_name}</b><br>Variation: {variation_pct:+.1f}%",
+            sticky=True
+        ),
+        popup=folium.Popup(popup_html, max_width=400)
+    ).add_to(m_pred)
+
+st_folium(m_pred, width=1400, height=650)
             
         st_folium(m_pred, width="100%", height=500, key="map_pred")
         

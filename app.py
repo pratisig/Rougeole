@@ -1,10 +1,10 @@
-"""
-============================================================
-APP COMPLET – SURVEILLANCE & PRÉDICTION ROUGEOLE (Multi-pays)
-Version améliorée selon spécifications
-PARTIE 1/5 - IMPORTS, CONFIG ET CHARGEMENT DONNÉES
-============================================================
-"""
+
+#============================================================
+#APP COMPLET – SURVEILLANCE & PRÉDICTION ROUGEOLE (Multi-pays)
+#Version améliorée selon spécifications
+#PARTIE 1/5 - IMPORTS, CONFIG ET CHARGEMENT DONNÉES
+#============================================================
+
 
 import streamlit as st
 import pandas as pd
@@ -344,11 +344,9 @@ def load_shapefile_from_upload(upload_file):
         st.error(f"❌ Erreur lecture: {e}")
         return gpd.GeoDataFrame()
 
-"""
-============================================================
-PARTIE 2/5 - CHARGEMENT AIRES DE SANTÉ ET DONNÉES DE CAS
-============================================================
-"""
+#============================================================
+#PARTIE 2/5 - CHARGEMENT AIRES DE SANTÉ ET DONNÉES DE CAS
+#============================================================
 
 # CHARGEMENT DES AIRES DE SANTÉ
 if st.session_state.sa_gdf_cache is not None and option_aire == "Fichier local (ao_hlthArea.zip)":
@@ -538,11 +536,10 @@ derniere_annee = df['Annee'].max()
 
 st.sidebar.info(f"📅 Dernière semaine: **S{derniere_semaine_epi}** ({derniere_annee})")
 
-"""
-============================================================
-PARTIE 3/5 - ENRICHISSEMENT AVEC DONNÉES EXTERNES
-WorldPop, NASA POWER, GHSL
-============================================================
+
+#============================================================
+#PARTIE 3/5 - ENRICHISSEMENT AVEC DONNÉES EXTERNES WorldPop, NASA POWER, GHSL
+#============================================================
 """
 
 # ============================================================
@@ -885,11 +882,11 @@ for nom, dispo in donnees_dispo.items():
     icone = "✅" if dispo else "❌"
     st.sidebar.text(f"{icone} {nom}")
 
-"""
-============================================================
-PARTIE 4/5 - KPIS, CARTE ET ANALYSES (VERSION AMÉLIORÉE)
-============================================================
-"""
+
+#============================================================
+#PARTIE 4/5 - KPIS, CARTE ET ANALYSES (VERSION AMÉLIORÉE)
+#============================================================
+
 
 # ============================================================
 # KPIS
@@ -1092,11 +1089,11 @@ with col_right:
     fig_age = px.histogram(df, x="Age_Mois", color="Sexe", nbins=20, barmode="group")
     st.plotly_chart(fig_age, use_container_width=True)
 
-"""
-============================================================
-PARTIE 5/5 - MODÉLISATION PRÉDICTIVE (MACHINE LEARNING)
-============================================================
-"""
+
+#============================================================
+#PARTIE 5/5 - MODÉLISATION PRÉDICTIVE (MACHINE LEARNING)
+#============================================================
+
 
 st.divider()
 st.header("🔮 Modélisation Prédictive & Alertes")

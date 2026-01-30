@@ -290,16 +290,16 @@ def load_health_areas_from_zip(zip_path, iso3_filter):
             # Standardiser les noms de colonnes
             # Détecter la colonne du nom de l'aire de santé
             name_col = None
-            for col in ['health_area', 'HEALTH_AREA', 'name', 'NAME', 'nom', 'NOM', 'aire_sante']:
+            for col in ['health_area', 'HEALTH_AREA', 'name', 'name_fr', 'NAME', 'nom', 'NOM', 'aire_sante']:
                 if col in gdf.columns:
                     name_col = col
                     break
             
             if name_col:
-                gdf['ADM3_NAME'] = gdf[name_col]
+                gdf['health_area'] = gdf[name_col]
             else:
                 # Générer des noms si aucune colonne trouvée
-                gdf['ADM3_NAME'] = [f"Aire_{i+1}" for i in range(len(gdf))]
+                gdf['health_area'] = [f"Aire_{i+1}" for i in range(len(gdf))]
             
             # Nettoyer les géométries invalides
             gdf = gdf[gdf.geometry.is_valid]
@@ -336,13 +336,13 @@ def load_shapefile_from_upload(upload_file):
             gdf = gpd.read_file(upload_file)
         
         # Standardiser les noms de colonnes
-        if "ADM3_NAME" not in gdf.columns:
-            for col in ["health_area", "HEALTH_AREA", "name", "NAME", "nom", "NOM"]:
+        if "health_area" not in gdf.columns:
+            for col in ["health_area", "HEALTH_AREA", "name", "name_fr","NAME", "nom", "NOM"]:
                 if col in gdf.columns:
-                    gdf["ADM3_NAME"] = gdf[col]
+                    gdf["health_area"] = gdf[col]
                     break
             else:
-                gdf["ADM3_NAME"] = [f"Aire_{i}" for i in range(len(gdf))]
+                gdf["health_area"] = [f"Aire_{i}" for i in range(len(gdf))]
         
         # Nettoyer les géométries
         gdf = gdf[gdf.geometry.is_valid]
@@ -407,7 +407,7 @@ if sa_gdf.empty or sa_gdf is None:
 
 # Afficher un échantillon des aires chargées
 with st.expander(f"📋 Aperçu des {len(sa_gdf)} aires de santé chargées", expanded=False):
-    st.dataframe(sa_gdf[['ADM3_NAME', 'geometry']].head(10))
+    st.dataframe(sa_gdf[['health_area', 'geometry']].head(10))
     st.caption(f"Projection: {sa_gdf.crs}")
 # ============================================================
 # 4. GÉNÉRATION/CHARGEMENT LINELIST
@@ -437,7 +437,7 @@ def generate_dummy_linelists(_sa_gdf, n=500, start=None, end=None):
         "Date_Notification": dates + pd.to_timedelta(
             np.random.poisson(3, n), unit="D"
         ),
-        "Aire_Sante": np.random.choice(_sa_gdf["ADM3_NAME"].unique(), n),
+        "Aire_Sante": np.random.choice(_sa_gdf["health_area"].unique(), n),
         "Age_Mois": np.random.gamma(shape=2, scale=30, size=n).clip(6, 180).astype(int),
         "Statut_Vaccinal": np.random.choice(["Oui", "Non"], n, p=[0.55, 0.45]),
         "Sexe": np.random.choice(["M", "F"], n),
@@ -516,7 +516,7 @@ def worldpop_children_stats(_sa_gdf, use_gee):
         # Simulation réaliste basée sur la superficie
         pop_base = _sa_gdf.geometry.area.apply(lambda x: max(5000, int(x * 1e6 * np.random.uniform(50, 200))))
         return pd.DataFrame({
-            "ADM3_NAME": _sa_gdf["ADM3_NAME"], 
+            "health_area": _sa_gdf["health_area"], 
             "Pop_Totale": pop_base,
             "Pop_Moins_15": (pop_base * np.random.uniform(0.42, 0.52, len(_sa_gdf))).astype(int)
         })
@@ -526,7 +526,7 @@ def worldpop_children_stats(_sa_gdf, use_gee):
         features = []
         for idx, row in _sa_gdf.iterrows():
             geom = row['geometry']
-            props = {"ADM3_NAME": row["ADM3_NAME"]}
+            props = {"health_area": row["health_area"]}
             
             if geom.geom_type == 'Polygon':
                 coords = [[[x, y] for x, y in geom.exterior.coords]]
@@ -565,7 +565,7 @@ def worldpop_children_stats(_sa_gdf, use_gee):
             props = feat['properties']
             pop_sum = sum([props.get(band, 0) for band in male_bands + female_bands])
             data_list.append({
-                "ADM3_NAME": props.get("ADM3_NAME", ""),
+                "health_area": props.get("health_area", ""),
                 "Pop_Moins_15": int(pop_sum),
                 "Pop_Totale": int(pop_sum * 2.2)  # Facteur standard
             })
@@ -576,7 +576,7 @@ def worldpop_children_stats(_sa_gdf, use_gee):
         st.sidebar.warning(f"⚠️ WorldPop indisponible: Simulation activée")
         pop_base = _sa_gdf.geometry.area.apply(lambda x: max(5000, int(x * 1e6 * np.random.uniform(50, 200))))
         return pd.DataFrame({
-            "ADM3_NAME": _sa_gdf["ADM3_NAME"], 
+            "health_area": _sa_gdf["health_area"], 
             "Pop_Totale": pop_base,
             "Pop_Moins_15": (pop_base * np.random.uniform(0.42, 0.52, len(_sa_gdf))).astype(int)
         })
@@ -594,7 +594,7 @@ def urban_classification(_sa_gdf, use_gee):
     if not use_gee:
         # Simulation basée sur la densité
         return pd.DataFrame({
-            "ADM3_NAME": _sa_gdf["ADM3_NAME"],
+            "health_area": _sa_gdf["health_area"],
             "Urbanisation": np.random.choice(
                 ["Urbain", "Rural", "Semi-urbain"], 
                 len(_sa_gdf), 
@@ -607,7 +607,7 @@ def urban_classification(_sa_gdf, use_gee):
         features = []
         for idx, row in _sa_gdf.iterrows():
             geom = row['geometry']
-            props = {"ADM3_NAME": row["ADM3_NAME"]}
+            props = {"health_area": row["health_area"]}
             
             if geom.geom_type == 'Polygon':
                 coords = [[[x, y] for x, y in geom.exterior.coords]]
@@ -648,7 +648,7 @@ def urban_classification(_sa_gdf, use_gee):
         for feat in urban_info['features']:
             props = feat['properties']
             data_list.append({
-                "ADM3_NAME": props.get("ADM3_NAME", ""),
+                "health_area": props.get("health_area", ""),
                 "Urbanisation": props.get("Urbanisation", "Rural")
             })
         
@@ -657,7 +657,7 @@ def urban_classification(_sa_gdf, use_gee):
     except Exception as e:
         st.sidebar.warning(f"⚠️ GHSL indisponible: Simulation activée")
         return pd.DataFrame({
-            "ADM3_NAME": _sa_gdf["ADM3_NAME"],
+            "health_area": _sa_gdf["health_area"],
             "Urbanisation": np.random.choice(
                 ["Urbain", "Rural", "Semi-urbain"], 
                 len(_sa_gdf), 
@@ -704,14 +704,14 @@ def fetch_climate_nasa_power(_sa_gdf, start_date, end_date):
                 rh_mean = np.nanmean(rh_values) if rh_values else 50.0
                 
                 data_list.append({
-                    "ADM3_NAME": row["ADM3_NAME"],
+                    "health_area": row["health_area"],
                     "Temperature_Moy": temp_mean,
                     "Humidite_Moy": rh_mean,
                     "Saison_Seche_Humidite": rh_mean * 0.7
                 })
             else:
                 data_list.append({
-                    "ADM3_NAME": row["ADM3_NAME"],
+                    "health_area": row["health_area"],
                     "Temperature_Moy": 28.0 + np.random.uniform(-3, 3),
                     "Humidite_Moy": 50.0 + np.random.uniform(-10, 10),
                     "Saison_Seche_Humidite": 35.0 + np.random.uniform(-5, 5)
@@ -719,7 +719,7 @@ def fetch_climate_nasa_power(_sa_gdf, start_date, end_date):
                 
         except:
             data_list.append({
-                "ADM3_NAME": row["ADM3_NAME"],
+                "health_area": row["health_area"],
                 "Temperature_Moy": 28.0 + np.random.uniform(-3, 3),
                 "Humidite_Moy": 50.0 + np.random.uniform(-10, 10),
                 "Saison_Seche_Humidite": 35.0 + np.random.uniform(-5, 5)
@@ -735,9 +735,9 @@ with st.spinner("🔄 Récupération données climatiques..."):
 # ============================================================
 
 sa_gdf_enrichi = sa_gdf.copy()
-sa_gdf_enrichi = sa_gdf_enrichi.merge(pop_df, on="ADM3_NAME", how="left")
-sa_gdf_enrichi = sa_gdf_enrichi.merge(urban_df, on="ADM3_NAME", how="left")
-sa_gdf_enrichi = sa_gdf_enrichi.merge(climate_df, on="ADM3_NAME", how="left")
+sa_gdf_enrichi = sa_gdf_enrichi.merge(pop_df, on="health_area", how="left")
+sa_gdf_enrichi = sa_gdf_enrichi.merge(urban_df, on="health_area", how="left")
+sa_gdf_enrichi = sa_gdf_enrichi.merge(climate_df, on="health_area", how="left")
 
 # Calculer superficie et densité
 sa_gdf_enrichi["Superficie_km2"] = sa_gdf_enrichi.geometry.area / 1e6
@@ -791,7 +791,7 @@ cases_by_area.columns = ["Aire_Sante", "Cas_Observes", "Taux_Non_Vaccines", "Age
 # Fusionner avec données spatiales
 sa_gdf_with_cases = sa_gdf_enrichi.merge(
     cases_by_area, 
-    left_on="ADM3_NAME", 
+    left_on="health_area", 
     right_on="Aire_Sante", 
     how="left"
 )
@@ -1010,7 +1010,7 @@ for idx, row in sa_gdf_with_cases.iterrows():
     popup_html = f"""
     <div style="font-family: Arial; width: 350px;">
         <h3 style="margin-bottom: 10px; color: #1976d2; border-bottom: 2px solid #1976d2;">
-            {row['ADM3_NAME']}
+            {row['health_area']}
         </h3>
         
         <div style="background-color: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 5px;">
@@ -1062,7 +1062,7 @@ for idx, row in sa_gdf_with_cases.iterrows():
             'fillOpacity': 0.7
         },
         tooltip=folium.Tooltip(
-            f"<b>{row['ADM3_NAME']}</b><br>{int(row['Cas_Observes'])} cas<br>Pop: {int(row['Pop_Totale']):,}",
+            f"<b>{row['health_area']}</b><br>{int(row['Cas_Observes'])} cas<br>Pop: {int(row['Pop_Totale']):,}",
             sticky=True
         ),
         popup=folium.Popup(popup_html, max_width=400)
@@ -1169,11 +1169,11 @@ if st.session_state.prediction_lancee:
         # Fusionner avec données spatiales
         weekly_features = weekly_features.merge(
             sa_gdf_enrichi[[
-                "ADM3_NAME", "Pop_Totale", "Pop_Moins_15", "Densite_Moins_15", 
+                "health_area", "Pop_Totale", "Pop_Moins_15", "Densite_Moins_15", 
                 "Urbanisation", "Temperature_Moy", "Humidite_Moy", "Saison_Seche_Humidite"
             ]],
             left_on="Aire_Sante",
-            right_on="ADM3_NAME",
+            right_on="health_area",
             how="left"
         )
         
@@ -1569,7 +1569,7 @@ if st.session_state.prediction_lancee:
         
         sa_gdf_pred = sa_gdf_enrichi.merge(
             risk_df,
-            left_on="ADM3_NAME",
+            left_on="health_area",
             right_on="Aire_Sante",
             how="left"
         )
@@ -1596,7 +1596,7 @@ if st.session_state.prediction_lancee:
             popup_html = f"""
             <div style="font-family: Arial; width: 360px;">
                 <h3 style="color: #1976d2; border-bottom: 2px solid #1976d2;">
-                    {row['ADM3_NAME']}
+                    {row['health_area']}
                 </h3>
                 
                 <div style="background-color: {'#ffebee' if row['Variation_Pct'] >= seuil_hausse else '#e8f5e9' if row['Variation_Pct'] <= -seuil_baisse else '#f5f5f5'}; 
@@ -1627,7 +1627,7 @@ if st.session_state.prediction_lancee:
                     'fillOpacity': 0.7
                 },
                 tooltip=folium.Tooltip(
-                    f"<b>{row['ADM3_NAME']}</b><br>Variation: {row.get('Variation_Pct', 0):+.1f}%",
+                    f"<b>{row['health_area']}</b><br>Variation: {row.get('Variation_Pct', 0):+.1f}%",
                     sticky=True
                 ),
                 popup=folium.Popup(popup_html, max_width=400)

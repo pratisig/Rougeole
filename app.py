@@ -2154,36 +2154,6 @@ if mode_importance == "Manuel (Expert)":
 else:
     # Mode automatique (actuel)
     X_scaled = scaler.fit_transform(X)
-
-Ma recommandation
-
-Je vous suggère d'utiliser l'OPTION 3 (hybride) car :
-
-    ✅ Flexibilité : L'utilisateur peut choisir automatique ou manuel
-    ✅ Traçabilité : On voit clairement quels poids sont utilisés
-    ✅ Expertise : Permet d'intégrer les connaissances épidémiologiques
-    ✅ Validation : On peut comparer les performances des deux approches
-
-Avantages de votre approche manuelle :
-
-    Basée sur l'expertise épidémiologique
-    Reproductible
-    Explicable aux décideurs
-
-Avantages de l'approche automatique actuelle :
-
-    S'adapte aux données réelles
-    Peut découvrir des relations inattendues
-    Optimisée pour la prédiction
-
-Voulez-vous que je vous fournisse le code complet avec l'option hybride intégrée ?
-
-oui
-10:36 AM
-
-Voici le code complet avec le système hybride d'importance des variables intégré :
-python
-
 # ============================================================
 # APP SURVEILLANCE & PRÉDICTION ROUGEOLE - VERSION 3.0
 # PARTIE 1/6 - IMPORTS ET CONFIGURATION

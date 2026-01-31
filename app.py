@@ -2019,23 +2019,7 @@ Cas analysés: {len(df):,} |
 Mode: {mode_demo}
 """)
 
-Cette section corrigée inclut :
 
-    ✅ L'export des résultats (CSV, GeoJSON, Excel)
-    ✅ Les recommandations opérationnelles
-    ✅ La méthodologie de prédiction
-    ✅ Le message pour les utilisateurs qui n'ont pas encore lancé la prédiction
-    ✅ Le footer du dashboard
-    ✅ Toutes les indentations correctes
-    ✅ Pas de problèmes d'alignement
-
-comment est attribuée l'Importance des variables dans la prediction?
-moi j'avais proposé ceci: Cas_Observes : 0.4Non_Vaccines : 0.35Pop_Totale : 0.15Urban_Encoded : 0.08Coef_Climatique : 0.02 si ces donnees sont disponble
-10:34 AM
-
-L'importance des variables dans votre code actuel est déterminée automatiquement par l'algorithme de machine learning lui-même, pas attribuée manuellement. Voici comment cela fonctionne :
-Comment fonctionne l'importance actuelle (automatique)
-python
 
 if hasattr(model, 'feature_importances_'):
     feature_importance = pd.DataFrame({

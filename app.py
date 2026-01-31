@@ -1902,22 +1902,6 @@ Mode: {mode_demo}
 """)
 
 
-Toutes les corrections apportées :
-
-1. ✅ Remplacement de tous les `"""` par des commentaires `#`
-2. ✅ Correction de l'indentation pour toutes les sections
-3. ✅ Alignement cohérent dans tout le code
-4. ✅ Pas d'interruption - code complet en un seul bloc
-5. ✅ Structure maintenue avec les 6 parties clairement identifiées
-6. ✅ Toutes les fonctionnalités préservées
-
-Le code est maintenant prêt à être utilisé sans aucun problème d'alignement ou de syntaxe !
-
-il ya un probleme, peux tu reprendre toute la section st.header("💾 Export des Résultats") et ce qui vient après?
-10:23 AM
-
-Voici la section complète corrigée à partir de st.header("💾 Export des Résultats") :
-python
 
         st.header("💾 Export des Résultats")
         

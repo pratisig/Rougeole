@@ -677,7 +677,8 @@ def worldpop_children_stats(_sa_gdf, use_gee):
                 "Pop_Enfants": int(enfants_total)
             })
             
-            progress_bar.progress((i + 1) / total_aires)
+            progress_value = min((i + 1) / total_aires, 1.0)
+            progress_bar.progress(progress_value)
         
         progress_bar.empty()
         status_text.text("✅ WorldPop terminé")
@@ -761,7 +762,8 @@ def urban_classification(_sa_gdf, use_gee):
                 "health_area": props.get("health_area", ""),
                 "Urbanisation": props.get("Urbanisation", "Rural")
             })
-            progress_bar.progress((i + 1) / total_aires)
+            progress_value = min((i + 1) / total_aires, 1.0)
+            progress_bar.progress(progress_value)
         
         progress_bar.empty()
         status_text.text("✅ GHSL terminé")
@@ -840,7 +842,8 @@ def fetch_climate_nasa_power(_sa_gdf, start_date, end_date):
                 "Saison_Seche_Humidite": np.nan
             })
         
-        progress_bar.progress((idx + 1) / total_aires)
+        progress_value = min((idx + 1) / total_aires, 1.0)
+        progress_bar.progress(progress_value)
     
     progress_bar.empty()
     status_text.text("✅ Climat terminé")

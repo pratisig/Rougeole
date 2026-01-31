@@ -1811,4 +1811,96 @@ if st.session_state.prediction_lancee:
                 mime="text/csv"
             )
         
-        with
+        with col3:
+            geojson_str = sa_gdf_pred.to_json()
+            st.download_button(
+                label="🗺️ Carte prédictions (GeoJSON)",
+                data=geojson_str,
+                file_name=f"carte_predictions_{pays_selectionne if pays_selectionne else 'pays'}_{datetime.now().strftime('%Y%m%d')}.geojson",
+                mime="application/json"
+            )
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            risk_df.to_excel(writer, sheet_name='Synthese', index=False)
+            future_df.to_excel(writer, sheet_name='Detail_Semaines', index=False)
+            cases_by_area.to_excel(writer, sheet_name='Cas_Observes', index=False)
+            age_stats.to_excel(writer, sheet_name='Analyse_Age', index=False)
+            weekly_cases.to_excel(writer, sheet_name='Historique_Hebdo', index=False)
+        
+        st.download_button(
+            label="📊 Rapport complet (Excel)",
+            data=output.getvalue(),
+            file_name=f"rapport_complet_{pays_selectionne if pays_selectionne else 'pays'}_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+        
+        st.header("💡 Recommandations Opérationnelles")
+        
+        aires_critiques_hausse = risk_df[risk_df["Variation_Pct"] >= seuil_hausse]["Aire_Sante"].tolist()
+        aires_amelioration = risk_df[risk_df["Variation_Pct"] <= -seuil_baisse]["Aire_Sante"].tolist()
+        
+        if aires_critiques_hausse:
+            st.error(f"🚨 **{len(aires_critiques_hausse)} aire(s) à risque CRITIQUE (hausse ≥{seuil_hausse}%)**")
+            
+            for i, aire in enumerate(aires_critiques_hausse[:5], 1):
+                aire_info = risk_df[risk_df["Aire_Sante"] == aire].iloc[0]
+                st.write(f"{i}. **{aire}**: {aire_info['Variation_Pct']:+.1f}% - Pic S{aire_info['Semaine_Pic']} ({int(aire_info['Cas_Predits_Max'])} cas)")
+            
+            if len(aires_critiques_hausse) > 5:
+                st.caption(f"... et {len(aires_critiques_hausse)-5} autre(s)")
+            
+            st.write("")
+            st.write("**Actions prioritaires recommandées:**")
+            st.write("✅ Renforcer la surveillance épidémiologique hebdomadaire dans ces aires")
+            st.write("✅ Organiser des campagnes de vaccination de rattrapage urgentes")
+            st.write("✅ Prépositionner les stocks de vaccins et intrants médicaux")
+            st.write("✅ Sensibiliser les communautés aux signes d'alerte de la rougeole")
+            st.write("✅ Coordonner avec les partenaires (OMS, UNICEF, MSF)")
+            st.write("✅ Préparer les structures de santé à une augmentation de cas")
+        
+        if aires_amelioration:
+            st.success(f"✓ **{len(aires_amelioration)} aire(s) montrent une amélioration (baisse ≥{seuil_baisse}%)**")
+            st.write("**Bonnes pratiques à capitaliser:**")
+            st.write("• Documenter les interventions ayant conduit à cette baisse")
+            st.write("• Partager les leçons apprises avec les autres aires")
+            st.write("• Maintenir la vigilance pour éviter une résurgence")
+        
+        if not aires_critiques_hausse and not aires_amelioration:
+            st.info("ℹ️ **Situation stable** - Aucune variation significative détectée")
+            st.write("• Maintenir la surveillance de routine")
+            st.write("• Continuer les activités de vaccination selon le calendrier")
+        
+        st.markdown("---")
+        st.caption(f"""
+**Méthodologie de prédiction:**
+Modèle: {modele_choisi} | Score R² (validation croisée): {cv_mean:.3f} (±{cv_std:.3f}) |
+Variables: {len(feature_cols)} features (historique 4 semaines, démographie, urbanisation, climat, vaccination) |
+Période: S{derniere_semaine_epi+1} à S{min(derniere_semaine_epi+n_weeks_pred, 52)} ({n_weeks_pred} semaines) |
+Seuils: Baisse ≥{seuil_baisse}%, Hausse ≥{seuil_hausse}%, Alerte ≥{seuil_alerte_epidemique} cas/sem
+        """)
+
+else:
+    st.info("👆 Cliquez sur le bouton ci-dessus pour lancer la modélisation prédictive")
+    st.markdown("""
+### 📚 Ce que vous obtiendrez :
+✅ **Prédictions par semaines épidémiologiques** (S1 à S52)
+✅ **Identification des aires à risque** selon vos seuils personnalisés
+✅ **Heatmap temporelle** (évolution semaine par semaine)
+✅ **Cartes interactives** avec prédictions
+✅ **Export multi-formats** (CSV, Excel, GeoJSON)
+✅ **Recommandations opérationnelles** basées sur les résultats
+✅ **Intégration automatique** des données disponibles (climat, vaccination, démographie)
+    """)
+
+st.markdown("---")
+st.caption(f"""
+Dashboard de Surveillance Rougeole - Version 3.0 (Améliorée) |
+Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')} |
+Pays: {pays_selectionne if pays_selectionne else 'Non spécifié'} |
+Période: {start_date} - {end_date} |
+Nombre d'aires: {len(sa_gdf)} |
+Cas analysés: {len(df):,} |
+Mode: {mode_demo}
+""")

@@ -1368,7 +1368,7 @@ for idx, row in sa_gdf_pred.iterrows():
 
 st_folium(m_pred, width=1400, height=650)
             
-        st_folium(m_pred, width="100%", height=500, key="map_pred")
+st_folium(m_pred, width="100%", height=500, key="map_pred")
         
         # Export des résultats
         csv_pred = resultats_finaux.to_csv(index=False).encode('utf-8')

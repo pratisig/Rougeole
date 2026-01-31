@@ -2027,19 +2027,6 @@ if hasattr(model, 'feature_importances_'):
         "Importance": model.feature_importances_  # <-- Calculée par le modèle
     }).sort_values("Importance", ascending=False)
 
-Les modèles comme GradientBoosting, RandomForest et DecisionTree calculent automatiquement l'importance en fonction de :
-
-    La réduction d'impureté (Gini importance)
-    La fréquence d'utilisation de la variable
-    L'impact sur la précision des prédictions
-
-Votre proposition : Poids manuels
-
-Si vous voulez imposer des poids fixes comme vous l'avez proposé, voici comment modifier le code :
-python
-
-# OPTION 1 : Utiliser un modèle avec poids personnalisés (Régression pondérée)
-# À ajouter dans la section d'entraînement du modèle
 
 # Définir vos poids manuels
 POIDS_MANUELS = {

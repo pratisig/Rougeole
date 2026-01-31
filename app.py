@@ -1811,9 +1811,7 @@ if st.session_state.prediction_lancee:
                 mime="text/csv"
             )
         
-        with
-
-Continue à partir de :
+        
 with col2: csv_detail = future_df.to_csv(index=False).encode('utf-8') st.download_button( label="📅 Détail par semaine (CSV)", data=csv_detail, file_name=f"predictions_detail_{pays_selectionne if pays_selectionne else 'pays'}_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv" ) with
 10:21 AM
 

@@ -1284,7 +1284,7 @@ if st.button("🚀 Lancer la modélisation prédictive", type="primary"):
 sa_gdf_pred = sa_gdf_enrichi.merge(
     risk_df,
     left_on="health_area",
-    right_on="Aire_Sante",
+    right_on="health_area",
     how="left"
 )
 

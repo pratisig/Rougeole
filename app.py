@@ -699,7 +699,16 @@ def worldpop_children_stats(_sa_gdf, use_gee):
             "Pop_Totale": [np.nan] * len(_sa_gdf),
             "Pop_Garcons": [np.nan] * len(_sa_gdf),
             "Pop_Filles": [np.nan] * len(_sa_gdf),
-            "Pop_Enfants": [np.nan] * len(_sa_gdf)
+            "Pop_Enfants": [np.nan] * len(_sa_gdf),
+            # Nouvelles colonnes pour pyramide
+            "Pop_M_0": [np.nan] * len(_sa_gdf),
+            "Pop_M_1": [np.nan] * len(_sa_gdf),
+            "Pop_M_5": [np.nan] * len(_sa_gdf),
+            "Pop_M_10": [np.nan] * len(_sa_gdf),
+            "Pop_F_0": [np.nan] * len(_sa_gdf),
+            "Pop_F_1": [np.nan] * len(_sa_gdf),
+            "Pop_F_5": [np.nan] * len(_sa_gdf),
+            "Pop_F_10": [np.nan] * len(_sa_gdf)
         })
     
     try:
@@ -717,21 +726,19 @@ def worldpop_children_stats(_sa_gdf, use_gee):
         selected_females = pop_img.select(female_bands)
         total_pop = pop_img.select(['population'])
         
-        # ========== CALCUL DES SOMMES ==========
+        # Sommes par sexe
         males_sum = selected_males.reduce(ee.Reducer.sum()).rename('garcons')
         females_sum = selected_females.reduce(ee.Reducer.sum()).rename('filles')
-        
-        # IMPORTANT : enfants = addition MATHÉMATIQUE (pas addBands)
         enfants = males_sum.add(females_sum).rename('enfants')
-        # ========================================
         
-        # ========== MOSAÏQUE FINALE ==========
-        # Option 1 : Garder population totale + détails enfants (RECOMMANDÉ)
-        final_mosaic = total_pop.addBands(males_sum).addBands(females_sum).addBands(enfants)
-        
-        # Option 2 : SEULEMENT enfants et répartition (votre version actuelle)
-        # final_mosaic = males_sum.addBands(females_sum).addBands(enfants)
-        # =====================================
+        # ========== MOSAÏQUE AVEC TOUTES LES BANDES ==========
+        final_mosaic = (total_pop
+                       .addBands(selected_males)      # Bandes M_0, M_1, M_5, M_10
+                       .addBands(selected_females)    # Bandes F_0, F_1, F_5, F_10
+                       .addBands(males_sum)
+                       .addBands(females_sum)
+                       .addBands(enfants))
+        # ====================================================
         
         # Conversion densité → compte absolu
         pixel_area = ee.Image.pixelArea().divide(10000)
@@ -775,19 +782,39 @@ def worldpop_children_stats(_sa_gdf, use_gee):
         for i, feat in enumerate(stats_info['features']):
             props = feat['properties']
             
-            # ========== EXTRACTION ==========
+            # ========== EXTRACTION DÉTAILLÉE ==========
             pop_totale = props.get("population", 0)
             garcons = props.get("garcons", 0)
             filles = props.get("filles", 0)
-            enfants_total = props.get("enfants", 0)  # ✅ Maintenant cette bande EXISTE
-            # ================================
+            enfants_total = props.get("enfants", 0)
+            
+            # Extraire chaque tranche d'âge individuellement
+            m_0 = props.get("M_0", 0)
+            m_1 = props.get("M_1", 0)
+            m_5 = props.get("M_5", 0)
+            m_10 = props.get("M_10", 0)
+            
+            f_0 = props.get("F_0", 0)
+            f_1 = props.get("F_1", 0)
+            f_5 = props.get("F_5", 0)
+            f_10 = props.get("F_10", 0)
+            # ==========================================
             
             data_list.append({
                 "health_area": props.get("health_area", ""),
                 "Pop_Totale": int(pop_totale) if pop_totale > 0 else np.nan,
                 "Pop_Garcons": int(garcons),
                 "Pop_Filles": int(filles),
-                "Pop_Enfants": int(enfants_total)
+                "Pop_Enfants": int(enfants_total),
+                # Nouvelles colonnes pour pyramide
+                "Pop_M_0": int(m_0),
+                "Pop_M_1": int(m_1),
+                "Pop_M_5": int(m_5),
+                "Pop_M_10": int(m_10),
+                "Pop_F_0": int(f_0),
+                "Pop_F_1": int(f_1),
+                "Pop_F_5": int(f_5),
+                "Pop_F_10": int(f_10)
             })
             
             progress_value = min((i + 1) / total_aires, 1.0)
@@ -809,7 +836,15 @@ def worldpop_children_stats(_sa_gdf, use_gee):
             "Pop_Totale": [np.nan] * len(_sa_gdf),
             "Pop_Garcons": [np.nan] * len(_sa_gdf),
             "Pop_Filles": [np.nan] * len(_sa_gdf),
-            "Pop_Enfants": [np.nan] * len(_sa_gdf)
+            "Pop_Enfants": [np.nan] * len(_sa_gdf),
+            "Pop_M_0": [np.nan] * len(_sa_gdf),
+            "Pop_M_1": [np.nan] * len(_sa_gdf),
+            "Pop_M_5": [np.nan] * len(_sa_gdf),
+            "Pop_M_10": [np.nan] * len(_sa_gdf),
+            "Pop_F_0": [np.nan] * len(_sa_gdf),
+            "Pop_F_1": [np.nan] * len(_sa_gdf),
+            "Pop_F_5": [np.nan] * len(_sa_gdf),
+            "Pop_F_10": [np.nan] * len(_sa_gdf)
         })
 
 
@@ -1400,6 +1435,129 @@ with col2:
         st.plotly_chart(fig_vacc_age, use_container_width=True)
     else:
         st.info("ℹ️ Données de vaccination par âge non disponibles")
+# ============================================================
+# PYRAMIDE DES ÂGES POPULATION (WORLDPOP)
+# ============================================================
+
+st.header("📊 Pyramide des Âges - Population Enfantine")
+
+if donnees_dispo["Population"]:
+    # Préparer les données de population par tranche d'âge
+    pyramid_data = []
+    
+    for idx, row in sa_gdf_enrichi.iterrows():
+        aire = row['health_area']
+        
+        # Récupérer les valeurs de population par tranche d'âge depuis WorldPop
+        # Si vous avez déjà extrait ces données individuellement
+        pop_0_1_m = row.get('Pop_M_0', 0) + row.get('Pop_M_1', 0)  # 0-4 ans garçons
+        pop_5_9_m = row.get('Pop_M_5', 0)  # 5-9 ans garçons
+        pop_10_14_m = row.get('Pop_M_10', 0)  # 10-14 ans garçons
+        
+        pop_0_1_f = row.get('Pop_F_0', 0) + row.get('Pop_F_1', 0)  # 0-4 ans filles
+        pop_5_9_f = row.get('Pop_F_5', 0)  # 5-9 ans filles
+        pop_10_14_f = row.get('Pop_F_10', 0)  # 10-14 ans filles
+        
+        pyramid_data.append({
+            'Aire': aire,
+            'Garçons_0-4': pop_0_1_m,
+            'Garçons_5-9': pop_5_9_m,
+            'Garçons_10-14': pop_10_14_m,
+            'Filles_0-4': pop_0_1_f,
+            'Filles_5-9': pop_5_9_f,
+            'Filles_10-14': pop_10_14_f
+        })
+    
+    pyramid_df = pd.DataFrame(pyramid_data)
+    
+    # Agréger pour tout le territoire
+    total_garcons_0_4 = pyramid_df['Garçons_0-4'].sum()
+    total_garcons_5_9 = pyramid_df['Garçons_5-9'].sum()
+    total_garcons_10_14 = pyramid_df['Garçons_10-14'].sum()
+    
+    total_filles_0_4 = pyramid_df['Filles_0-4'].sum()
+    total_filles_5_9 = pyramid_df['Filles_5-9'].sum()
+    total_filles_10_14 = pyramid_df['Filles_10-14'].sum()
+    
+    # Créer le dataframe pour la pyramide
+    age_groups = ['0-4', '5-9', '10-14']
+    
+    pyramid_plot_df = pd.DataFrame({
+        'Age': age_groups,
+        'Garçons': [-total_garcons_0_4, -total_garcons_5_9, -total_garcons_10_14],  # Négatif pour gauche
+        'Filles': [total_filles_0_4, total_filles_5_9, total_filles_10_14]  # Positif pour droite
+    })
+    
+    # Créer la pyramide avec Plotly
+    fig_pyramid = go.Figure()
+    
+    # Barres garçons (gauche - négatif)
+    fig_pyramid.add_trace(go.Bar(
+        y=pyramid_plot_df['Age'],
+        x=pyramid_plot_df['Garçons'],
+        name='Garçons',
+        orientation='h',
+        marker=dict(color='#42a5f5'),
+        text=[f"{abs(x):,.0f}" for x in pyramid_plot_df['Garçons']],
+        textposition='inside',
+        hovertemplate='<b>%{y} ans</b><br>Garçons: %{text}<extra></extra>'
+    ))
+    
+    # Barres filles (droite - positif)
+    fig_pyramid.add_trace(go.Bar(
+        y=pyramid_plot_df['Age'],
+        x=pyramid_plot_df['Filles'],
+        name='Filles',
+        orientation='h',
+        marker=dict(color='#ec407a'),
+        text=[f"{x:,.0f}" for x in pyramid_plot_df['Filles']],
+        textposition='inside',
+        hovertemplate='<b>%{y} ans</b><br>Filles: %{text}<extra></extra>'
+    ))
+    
+    # Calculer les limites symétriques
+    max_val = max(
+        abs(pyramid_plot_df['Garçons'].min()),
+        pyramid_plot_df['Filles'].max()
+    )
+    
+    fig_pyramid.update_layout(
+        title='Pyramide des Âges - Population Enfantine (0-14 ans)',
+        xaxis=dict(
+            title='Population',
+            tickvals=[-max_val, -max_val/2, 0, max_val/2, max_val],
+            ticktext=[f"{int(max_val):,}", f"{int(max_val/2):,}", "0", 
+                     f"{int(max_val/2):,}", f"{int(max_val):,}"],
+            range=[-max_val * 1.1, max_val * 1.1]
+        ),
+        yaxis=dict(title='Tranche d\'âge'),
+        barmode='overlay',
+        height=400,
+        bargap=0.1,
+        showlegend=True,
+        legend=dict(x=0.85, y=0.95),
+        hovermode='y unified'
+    )
+    
+    st.plotly_chart(fig_pyramid, use_container_width=True)
+    
+    # Statistiques complémentaires
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        total_garcons = total_garcons_0_4 + total_garcons_5_9 + total_garcons_10_14
+        st.metric("👦 Garçons (0-14 ans)", f"{int(total_garcons):,}")
+    
+    with col2:
+        total_filles = total_filles_0_4 + total_filles_5_9 + total_filles_10_14
+        st.metric("👧 Filles (0-14 ans)", f"{int(total_filles):,}")
+    
+    with col3:
+        ratio = (total_garcons / total_filles * 100) if total_filles > 0 else 0
+        st.metric("⚖️ Ratio G/F", f"{ratio:.1f}%")
+
+else:
+    st.info("📊 Données de population non disponibles. Pyramide des âges non affichable.")
 
 # Nowcasting
 st.subheader("⏱️ Nowcasting - Correction des Délais de Notification")

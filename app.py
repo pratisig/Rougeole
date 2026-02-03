@@ -1214,7 +1214,7 @@ for idx, row in sa_gdf_with_cases.iterrows():
         popup=folium.Popup(popup_html, max_width=400)
     ).add_to(m)
     
-    if casobs > 0:
+    if cas_obs > 0:
         folium.Marker(
             location=[row.geometry.centroid.y, row.geometry.centroid.x],
             icon=folium.DivIcon(

@@ -2210,14 +2210,7 @@ Seuils : Baisse ≥{seuil_baisse}%, Hausse ≥{seuil_hausse}%, Alerte ≥{seuil_
 else:
     st.info("👆 Cliquez sur le bouton ci-dessus pour lancer la modélisation prédictive")
     st.markdown("""
-### 📚 Ce que vous obtiendrez :
-✅ **Prédictions par semaines épidémiologiques** (S1 à S52)  
-✅ **Identification des aires à risque** selon vos seuils personnalisés  
-✅ **Heatmap temporelle** (évolution semaine par semaine)  
-✅ **Cartes interactives** avec prédictions  
-✅ **Export multi-formats** (CSV, Excel, GeoJSON)  
-✅ **Recommandations opérationnelles** basées sur les résultats  
-✅ **Intégration automatique** des données disponibles (climat, vaccination, démographie)
+
     """)
 
 st.markdown("---")

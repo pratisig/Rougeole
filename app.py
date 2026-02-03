@@ -1220,7 +1220,7 @@ for idx, row in sa_gdf_with_cases.iterrows():
             icon=folium.DivIcon(
                 html=f"""
                 <div style="
-                    font-size: 9pt;
+                    font-size: 7pt;
                     color: black;
                     font-weight: normal;
                     background: none;

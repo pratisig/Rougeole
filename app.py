@@ -1228,7 +1228,7 @@ for idx, row in sa_gdf_with_cases.iterrows():
                     border: none;
                     box-shadow: none;
                     white-space: nowrap;
-                ">{airename}</div>
+                ">{aire_name}</div>
                 """
             ),
         ).add_to(m)

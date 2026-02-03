@@ -1214,25 +1214,25 @@ for idx, row in sa_gdf_with_cases.iterrows():
         popup=folium.Popup(popup_html, max_width=400)
     ).add_to(m)
     
-    if cas_obs > 0:
-        folium.Marker(
-            location=[row.geometry.centroid.y, row.geometry.centroid.x],
-            icon=folium.DivIcon(html=f"""
-                <div style="
-                    font-size: 9pt;
-                    color: black;
-                    font-weight: bold;
-                    background-color: rgba(255, 255, 255, 0.85);
-                    padding: 1px 4px;
-                    border-radius: 3px;
-                    white-space: nowrap;
-                    border: 1px solid rgba(0, 0, 0, 0.2);
-                    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-                ">
-                    {aire_name}
-                </div>
-            """)
-        ).add_to(m)
+    if casobs > 0:
+    folium.Marker(
+        location=[row.geometry.centroid.y, row.geometry.centroid.x],
+        icon=folium.DivIcon(
+            html=f"""
+            <div style="
+                font-size: 9pt;
+                color: black;
+                font-weight: normal;
+                background: none;
+                padding: 0;
+                border: none;
+                box-shadow: none;
+                white-space: nowrap;
+            ">{airename}</div>
+            """
+        ),
+    ).add_to(m)
+
 
 heat_data = [
     [row.geometry.centroid.y, row.geometry.centroid.x, row['Cas_Observes']]

@@ -1215,23 +1215,23 @@ for idx, row in sa_gdf_with_cases.iterrows():
     ).add_to(m)
     
     if casobs > 0:
-    folium.Marker(
-        location=[row.geometry.centroid.y, row.geometry.centroid.x],
-        icon=folium.DivIcon(
-            html=f"""
-            <div style="
-                font-size: 9pt;
-                color: black;
-                font-weight: normal;
-                background: none;
-                padding: 0;
-                border: none;
-                box-shadow: none;
-                white-space: nowrap;
-            ">{airename}</div>
-            """
-        ),
-    ).add_to(m)
+        folium.Marker(
+            location=[row.geometry.centroid.y, row.geometry.centroid.x],
+            icon=folium.DivIcon(
+                html=f"""
+                <div style="
+                    font-size: 9pt;
+                    color: black;
+                    font-weight: normal;
+                    background: none;
+                    padding: 0;
+                    border: none;
+                    box-shadow: none;
+                    white-space: nowrap;
+                ">{airename}</div>
+                """
+            ),
+        ).add_to(m)
 
 
 heat_data = [

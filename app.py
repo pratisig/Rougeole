@@ -915,11 +915,14 @@ with col2:
         st.metric("💉 Non vaccinés", "N/A")
 
 with col3:
-    age_median = df["Age_Mois"].median()
-    st.metric("👶 Âge médian", f"{int(age_median)} mois")
+    if "Age_Mois" in df.columns:
+        age_median = df["Age_Mois"].median()
+        st.metric("👶 Âge médian", f"{int(age_median)} mois")
+    else:
+        st.metric("👶 Âge médian", "N/A")
 
 with col4:
-    if "Issue" in df.columns:
+    if "Issue" in df.columns and (df["Issue"] == "Décédé").sum() > 0:
         taux_deces = (df["Issue"] == "Décédé").mean() * 100
         st.metric("☠️ Létalité", f"{taux_deces:.2f}%")
     else:
@@ -931,21 +934,30 @@ with col5:
     st.metric("🗺️ Aires touchées", f"{n_aires_touchees}/{len(sa_gdf)}", delta=f"{pct_aires:.0f}%")
 
 # Agrégation par aire
-agg_dict = {
-    "ID_Cas": "count",
-    "Age_Mois": "mean"
-}
+agg_dict = {"ID_Cas": "count"}
+
+if "Age_Mois" in df.columns:
+    agg_dict["Age_Mois"] = "mean"
 
 if "Statut_Vaccinal" in df.columns:
     agg_dict["Statut_Vaccinal"] = lambda x: (x == "Non").mean() * 100
 
 cases_by_area = df.groupby("Aire_Sante").agg(agg_dict).reset_index()
 
+# Renommer les colonnes selon ce qui est présent
+rename_map = {"ID_Cas": "Cas_Observes"}
+if "Age_Mois" in cases_by_area.columns:
+    rename_map["Age_Mois"] = "Age_Moyen"
 if "Statut_Vaccinal" in cases_by_area.columns:
-    cases_by_area.columns = ["Aire_Sante", "Cas_Observes", "Taux_Non_Vaccines", "Age_Moyen"]
-else:
-    cases_by_area.columns = ["Aire_Sante", "Cas_Observes", "Age_Moyen"]
+    rename_map["Statut_Vaccinal"] = "Taux_Non_Vaccines"
+
+cases_by_area = cases_by_area.rename(columns=rename_map)
+
+# Ajouter des colonnes par défaut si absentes
+if "Taux_Non_Vaccines" not in cases_by_area.columns:
     cases_by_area["Taux_Non_Vaccines"] = 0
+if "Age_Moyen" not in cases_by_area.columns:
+    cases_by_area["Age_Moyen"] = 0
 
 cases_by_area.columns = ["Aire_Sante", "Cas_Observes", "Taux_Non_Vaccines", "Age_Moyen"]
 
@@ -1209,11 +1221,16 @@ with col3:
 # Distribution par âge
 st.subheader("👶 Distribution par Tranches d'Âge")
 
-df["Tranche_Age"] = pd.cut(
-    df["Age_Mois"],
-    bins=[0, 12, 60, 120, 180],
-    labels=["0-1 an", "1-5 ans", "5-10 ans", "10-15 ans"]
-)
+if "Age_Mois" in df.columns:
+    df["Tranche_Age"] = pd.cut(
+        df["Age_Mois"],
+        bins=[0, 12, 60, 120, 180],
+        labels=["0-1 an", "1-5 ans", "5-10 ans", "10-15 ans"]
+    )
+    age_available = True
+else:
+    df["Tranche_Age"] = "Inconnu"
+    age_available = False
 
 agg_dict_age = {"ID_Cas": "count"}
 
@@ -1222,29 +1239,37 @@ if "Statut_Vaccinal" in df.columns:
 
 age_stats = df.groupby("Tranche_Age").agg(agg_dict_age).reset_index()
 
+rename_map_age = {"ID_Cas": "Nombre_Cas"}
 if "Statut_Vaccinal" in age_stats.columns:
-    age_stats.columns = ["Tranche_Age", "Nombre_Cas", "Pct_Non_Vaccines"]
-else:
-    age_stats.columns = ["Tranche_Age", "Nombre_Cas"]
+    rename_map_age["Statut_Vaccinal"] = "Pct_Non_Vaccines"
+
+age_stats = age_stats.rename(columns=rename_map_age)
+
+if "Pct_Non_Vaccines" not in age_stats.columns:
     age_stats["Pct_Non_Vaccines"] = 0
 
 col1, col2 = st.columns(2)
 
+col1, col2 = st.columns(2)
+
 with col1:
-    fig_age = px.bar(
-        age_stats,
-        x="Tranche_Age",
-        y="Nombre_Cas",
-        title="Cas par tranche d'âge",
-        color="Nombre_Cas",
-        color_continuous_scale="Reds",
-        text="Nombre_Cas"
-    )
-    fig_age.update_traces(textposition='outside')
-    st.plotly_chart(fig_age, use_container_width=True)
+    if age_available:
+        fig_age = px.bar(
+            age_stats,
+            x="Tranche_Age",
+            y="Nombre_Cas",
+            title="Cas par tranche d'âge",
+            color="Nombre_Cas",
+            color_continuous_scale="Reds",
+            text="Nombre_Cas"
+        )
+        fig_age.update_traces(textposition='outside')
+        st.plotly_chart(fig_age, use_container_width=True)
+    else:
+        st.info("ℹ️ Données d'âge non disponibles")
 
 with col2:
-    if "Pct_Non_Vaccines" in age_stats.columns and age_stats["Pct_Non_Vaccines"].sum() > 0:
+    if age_available and age_stats["Pct_Non_Vaccines"].sum() > 0:
         fig_vacc_age = px.bar(
             age_stats,
             x="Tranche_Age",
@@ -1257,7 +1282,7 @@ with col2:
         fig_vacc_age.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
         st.plotly_chart(fig_vacc_age, use_container_width=True)
     else:
-        st.info("ℹ️ Données de vaccination non disponibles")
+        st.info("ℹ️ Données de vaccination par âge non disponibles")
 
 # Nowcasting
 st.subheader("⏱️ Nowcasting - Correction des Délais de Notification")
@@ -1266,7 +1291,12 @@ st.info("""
 **Nowcasting (Prévision immédiate) :** Technique d'ajustement permettant d'estimer le nombre réel de cas en tenant compte des délais de notification.
 """)
 
-df["Delai_Notification"] = (df["Date_Notification"] - df["Date_Debut_Eruption"]).dt.days
+if "Date_Notification" in df.columns and "Date_Debut_Eruption" in df.columns:
+    df["Delai_Notification"] = (df["Date_Notification"] - df["Date_Debut_Eruption"]).dt.days
+    delai_available = True
+else:
+    df["Delai_Notification"] = 3  # Valeur par défaut
+    delai_available = False
 
 delai_moyen = df["Delai_Notification"].mean()
 delai_median = df["Delai_Notification"].median()
@@ -1294,19 +1324,22 @@ with col4:
         delta=f"+{cas_corriges - cas_derniere_semaine}"
     )
 
-fig_delai = px.histogram(
-    df,
-    x="Delai_Notification",
-    nbins=20,
-    title="Distribution des délais de notification",
-    labels={"Delai_Notification": "Délai (jours)", "count": "Nombre de cas"},
-    color_discrete_sequence=['#d32f2f']
-)
+if delai_available:
+    fig_delai = px.histogram(
+        df,
+        x="Delai_Notification",
+        nbins=20,
+        title="Distribution des délais de notification",
+        labels={"Delai_Notification": "Délai (jours)", "count": "Nombre de cas"},
+        color_discrete_sequence=['#d32f2f']
+    )
 
-fig_delai.add_vline(x=delai_moyen, line_dash="dash", line_color="blue", annotation_text=f"Moyenne : {delai_moyen:.1f}j")
-fig_delai.add_vline(x=delai_median, line_dash="dash", line_color="green", annotation_text=f"Médiane : {delai_median:.0f}j")
+    fig_delai.add_vline(x=delai_moyen, line_dash="dash", line_color="blue", annotation_text=f"Moyenne : {delai_moyen:.1f}j")
+    fig_delai.add_vline(x=delai_median, line_dash="dash", line_color="green", annotation_text=f"Médiane : {delai_median:.0f}j")
 
-st.plotly_chart(fig_delai, use_container_width=True)
+    st.plotly_chart(fig_delai, use_container_width=True)
+else:
+    st.info("ℹ️ Données de délai de notification non disponibles")
 
 # ============================================================
 # PARTIE 5/6 - MODÉLISATION PRÉDICTIVE AVEC SYSTÈME HYBRIDE

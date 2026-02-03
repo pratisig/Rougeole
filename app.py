@@ -569,13 +569,6 @@ with st.spinner("📥 Chargement données de cas..."):
                 st.sidebar.info("ℹ️ Pas de données de vaccination")
 
 # Filtrer par période
-# ========== DÉBOGAGE : Afficher les colonnes réelles du DataFrame ==========
-st.sidebar.markdown("---")
-st.sidebar.subheader("🔍 Débogage DataFrame")
-st.sidebar.text(f"Colonnes df : {list(df.columns)}")
-st.sidebar.text(f"Shape df : {df.shape}")
-st.sidebar.text(f"Colonnes sa_gdf : {list(sa_gdf.columns)}")
-# ============================================================================
 
 # Normaliser les noms de colonnes du DataFrame df
 COLONNES_MAPPING = {
@@ -1008,7 +1001,7 @@ with col1:
     st.metric("📈 Cas totaux", f"{len(df):,}")
 
 with col2:
-    if "Statut_Vaccinal" in df.columns:
+    if "Statut_Vaccinal" in df.columns and df["Statut_Vaccinal"].notna().sum() > 0 and (df["Statut_Vaccinal"] != "Inconnu").sum() > 0:
         taux_non_vac = (df["Statut_Vaccinal"] == "Non").mean() * 100
         delta_vac = taux_non_vac - 45
         st.metric("💉 Non vaccinés", f"{taux_non_vac:.1f}%", delta=f"{delta_vac:+.1f}%")
@@ -1016,14 +1009,14 @@ with col2:
         st.metric("💉 Non vaccinés", "N/A")
 
 with col3:
-    if "Age_Mois" in df.columns:
+    if "Age_Mois" in df.columns and df["Age_Mois"].notna().sum() > 0:
         age_median = df["Age_Mois"].median()
         st.metric("👶 Âge médian", f"{int(age_median)} mois")
     else:
         st.metric("👶 Âge médian", "N/A")
 
 with col4:
-    if "Issue" in df.columns and (df["Issue"] == "Décédé").sum() > 0:
+    if "Issue" in df.columns and df["Issue"].notna().sum() > 0 and (df["Issue"] == "Décédé").sum() > 0:
         taux_deces = (df["Issue"] == "Décédé").mean() * 100
         st.metric("☠️ Létalité", f"{taux_deces:.2f}%")
     else:
@@ -1316,8 +1309,11 @@ with col2:
 with col3:
     if len(weekly_cases) >= 2:
         variation = weekly_cases.iloc[-1]['Cas'] - weekly_cases.iloc[-2]['Cas']
-        pct_variation = (variation / weekly_cases.iloc[-2]['Cas'] * 100) if weekly_cases.iloc[-2]['Cas'] > 0 else 0
+        cas_precedent = weekly_cases.iloc[-2]['Cas']
+        pct_variation = (variation / cas_precedent * 100) if cas_precedent > 0 else 0
         st.metric("📉 Variation dernière semaine", f"{int(variation):+d} cas", f"{pct_variation:+.1f}%")
+    else:
+        st.metric("📉 Variation dernière semaine", "N/A")
 
 # Distribution par âge
 st.subheader("👶 Distribution par Tranches d'Âge")
@@ -1406,24 +1402,31 @@ delai_std = df["Delai_Notification"].std()
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.metric("Délai moyen de notification", f"{delai_moyen:.1f} jours")
+    st.metric("Délai moyen de notification", f"{delai_moyen:.1f} jours" if delai_available and not np.isnan(delai_moyen) else "N/A")
 
 with col2:
-    st.metric("Délai médian", f"{delai_median:.0f} jours")
+    st.metric("Délai médian", f"{delai_median:.0f} jours" if delai_available and not np.isnan(delai_median) else "N/A")
 
 with col3:
-    st.metric("Écart-type", f"{delai_std:.1f} jours")
+    st.metric("Écart-type", f"{delai_std:.1f} jours" if delai_available and not np.isnan(delai_std) else "N/A")
 
 with col4:
     derniere_semaine_label = weekly_cases.iloc[-1]['Semaine_Label']
     cas_derniere_semaine = int(weekly_cases.iloc[-1]['Cas'])
-    facteur_correction = 1 + (delai_moyen / 7)
-    cas_corriges = int(cas_derniere_semaine * facteur_correction)
-    st.metric(
-        f"Cas corrigés ({derniere_semaine_label})",
-        cas_corriges,
-        delta=f"+{cas_corriges - cas_derniere_semaine}"
-    )
+    if delai_available and not np.isnan(delai_moyen):
+        facteur_correction = 1 + (delai_moyen / 7)
+        cas_corriges = int(cas_derniere_semaine * facteur_correction)
+        st.metric(
+            f"Cas corrigés ({derniere_semaine_label})",
+            cas_corriges,
+            delta=f"+{cas_corriges - cas_derniere_semaine}"
+        )
+    else:
+        st.metric(
+            f"Cas corrigés ({derniere_semaine_label})",
+            cas_derniere_semaine,
+            delta="N/A"
+        )
 
 if delai_available:
     fig_delai = px.histogram(

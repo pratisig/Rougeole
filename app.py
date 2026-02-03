@@ -1015,7 +1015,10 @@ if vaccination_df is not None:
 else:
     sa_gdf_enrichi["Taux_Vaccination"] = np.nan
 
-sa_gdf_enrichi["Superficie_km2"] = sa_gdf_enrichi.geometry.area / 1e6
+# reprojection en métrique égale-aire
+sa_gdf_m = sa_gdf_enrichi.to_crs("ESRI:54009")  # Mollweide (mètres)
+
+sa_gdf_enrichi["Superficie_km2"] = sa_gdf_m.geometry.area / 1e6
 
 sa_gdf_enrichi["Densite_Pop"] = (
     sa_gdf_enrichi["Pop_Totale"] / sa_gdf_enrichi["Superficie_km2"].replace(0, np.nan)

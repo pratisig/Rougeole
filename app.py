@@ -569,6 +569,107 @@ with st.spinner("📥 Chargement données de cas..."):
                 st.sidebar.info("ℹ️ Pas de données de vaccination")
 
 # Filtrer par période
+# ========== DÉBOGAGE : Afficher les colonnes réelles du DataFrame ==========
+st.sidebar.markdown("---")
+st.sidebar.subheader("🔍 Débogage DataFrame")
+st.sidebar.text(f"Colonnes df : {list(df.columns)}")
+st.sidebar.text(f"Shape df : {df.shape}")
+st.sidebar.text(f"Colonnes sa_gdf : {list(sa_gdf.columns)}")
+# ============================================================================
+
+# Normaliser les noms de colonnes du DataFrame df
+COLONNES_MAPPING = {
+    # Colonne aire de santé
+    "Aire_Sante": ["Aire_Sante", "aire_sante", "health_area", "HEALTH_AREA", "name_fr", "NAME", "nom", "NOM"],
+    # Colonne date de début
+    "Date_Debut_Eruption": ["Date_Debut_Eruption", "date_debut_eruption", "Date_Debut", "date_onset", "Date_Onset", "symptom_onset"],
+    # Colonne date notification
+    "Date_Notification": ["Date_Notification", "date_notification", "Date_Notif", "date_notif", "notification_date"],
+    # Colonne ID cas
+    "ID_Cas": ["ID_Cas", "id_cas", "ID", "id", "Case_ID", "case_id", "ID_cas"],
+    # Colonne âge
+    "Age_Mois": ["Age_Mois", "age_mois", "Age", "age", "AGE", "Age_Months", "age_months"],
+    # Colonne statut vaccinal
+    "Statut_Vaccinal": ["Statut_Vaccinal", "statut_vaccinal", "Vaccin", "vaccin", "Vaccination_Status", "vaccination_status", "Vacc_Statut"],
+    # Colonne sexe
+    "Sexe": ["Sexe", "sexe", "Sex", "sex", "Gender", "gender"],
+    # Colonne issue
+    "Issue": ["Issue", "issue", "Outcome", "outcome", "OUTCOME"]
+}
+
+def normaliser_colonnes(dataframe, mapping):
+    """Renommer les colonnes du dataframe selon le mapping standardisé"""
+    rename_dict = {}
+    for col_standard, col_possibles in mapping.items():
+        for col_possible in col_possibles:
+            if col_possible in dataframe.columns and col_possible != col_standard:
+                rename_dict[col_possible] = col_standard
+                break
+    if rename_dict:
+        dataframe = dataframe.rename(columns=rename_dict)
+    return dataframe
+
+# Appliquer la normalisation
+df = normaliser_colonnes(df, COLONNES_MAPPING)
+
+# Si "ID_Cas" n'existe pas, en créer une
+if "ID_Cas" not in df.columns:
+    df["ID_Cas"] = range(1, len(df) + 1)
+
+# Si "Aire_Sante" n'existe pas, essayer de la créer depuis sa_gdf
+if "Aire_Sante" not in df.columns:
+    # Chercher n'importe quelle colonne qui pourrait contenir un nom d'aire
+    for col in df.columns:
+        if df[col].dtype == object:
+            # Vérifier si les valeurs matchent avec les aires de santé
+            sample_values = set(df[col].dropna().unique())
+            sa_values = set(sa_gdf["health_area"].unique())
+            if len(sample_values.intersection(sa_values)) > 0:
+                df["Aire_Sante"] = df[col]
+                st.sidebar.info(f"ℹ️ Colonne 'Aire_Sante' créée depuis '{col}'")
+                break
+    else:
+        # Si rien ne match, assigner une aire par défaut
+        df["Aire_Sante"] = sa_gdf["health_area"].iloc[0]
+        st.sidebar.warning("⚠️ Aucune colonne aire trouvée, valeur par défaut assignée")
+
+# Vérifier et convertir les dates
+if "Date_Debut_Eruption" in df.columns:
+    df["Date_Debut_Eruption"] = pd.to_datetime(df["Date_Debut_Eruption"], errors='coerce')
+else:
+    # Chercher une colonne date
+    for col in df.columns:
+        try:
+            test_dates = pd.to_datetime(df[col], errors='coerce')
+            if test_dates.notna().sum() > len(df) * 0.5:  # Plus de 50% de dates valides
+                df["Date_Debut_Eruption"] = test_dates
+                st.sidebar.info(f"ℹ️ 'Date_Debut_Eruption' créée depuis '{col}'")
+                break
+        except:
+            continue
+    else:
+        # Créer une date par défaut
+        df["Date_Debut_Eruption"] = pd.to_datetime(start_date)
+        st.sidebar.warning("⚠️ Aucune colonne date trouvée, date de début assignée par défaut")
+
+if "Date_Notification" not in df.columns:
+    # Créer Date_Notification = Date_Debut_Eruption + 3 jours par défaut
+    df["Date_Notification"] = df["Date_Debut_Eruption"] + pd.to_timedelta(3, unit="D")
+
+# Ajouter des colonnes optionnelles par défaut si absentes
+if "Age_Mois" not in df.columns:
+    df["Age_Mois"] = np.nan
+
+if "Statut_Vaccinal" not in df.columns:
+    df["Statut_Vaccinal"] = "Inconnu"
+
+if "Sexe" not in df.columns:
+    df["Sexe"] = "Inconnu"
+
+if "Issue" not in df.columns:
+    df["Issue"] = "Inconnu"
+
+# Filtrer par période
 df = df[
     (df["Date_Debut_Eruption"] >= pd.to_datetime(start_date)) &
     (df["Date_Debut_Eruption"] <= pd.to_datetime(end_date))

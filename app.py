@@ -907,9 +907,12 @@ with col1:
     st.metric("📈 Cas totaux", f"{len(df):,}")
 
 with col2:
-    taux_non_vac = (df["Statut_Vaccinal"] == "Non").mean() * 100
-    delta_vac = taux_non_vac - 45
-    st.metric("💉 Non vaccinés", f"{taux_non_vac:.1f}%", delta=f"{delta_vac:+.1f}%")
+    if "Statut_Vaccinal" in df.columns:
+        taux_non_vac = (df["Statut_Vaccinal"] == "Non").mean() * 100
+        delta_vac = taux_non_vac - 45
+        st.metric("💉 Non vaccinés", f"{taux_non_vac:.1f}%", delta=f"{delta_vac:+.1f}%")
+    else:
+        st.metric("💉 Non vaccinés", "N/A")
 
 with col3:
     age_median = df["Age_Mois"].median()
@@ -928,11 +931,21 @@ with col5:
     st.metric("🗺️ Aires touchées", f"{n_aires_touchees}/{len(sa_gdf)}", delta=f"{pct_aires:.0f}%")
 
 # Agrégation par aire
-cases_by_area = df.groupby("Aire_Sante").agg({
+agg_dict = {
     "ID_Cas": "count",
-    "Statut_Vaccinal": lambda x: (x == "Non").mean() * 100,
     "Age_Mois": "mean"
-}).reset_index()
+}
+
+if "Statut_Vaccinal" in df.columns:
+    agg_dict["Statut_Vaccinal"] = lambda x: (x == "Non").mean() * 100
+
+cases_by_area = df.groupby("Aire_Sante").agg(agg_dict).reset_index()
+
+if "Statut_Vaccinal" in cases_by_area.columns:
+    cases_by_area.columns = ["Aire_Sante", "Cas_Observes", "Taux_Non_Vaccines", "Age_Moyen"]
+else:
+    cases_by_area.columns = ["Aire_Sante", "Cas_Observes", "Age_Moyen"]
+    cases_by_area["Taux_Non_Vaccines"] = 0
 
 cases_by_area.columns = ["Aire_Sante", "Cas_Observes", "Taux_Non_Vaccines", "Age_Moyen"]
 
@@ -1202,12 +1215,18 @@ df["Tranche_Age"] = pd.cut(
     labels=["0-1 an", "1-5 ans", "5-10 ans", "10-15 ans"]
 )
 
-age_stats = df.groupby("Tranche_Age").agg({
-    "ID_Cas": "count",
-    "Statut_Vaccinal": lambda x: (x == "Non").mean() * 100
-}).reset_index()
+agg_dict_age = {"ID_Cas": "count"}
 
-age_stats.columns = ["Tranche_Age", "Nombre_Cas", "Pct_Non_Vaccines"]
+if "Statut_Vaccinal" in df.columns:
+    agg_dict_age["Statut_Vaccinal"] = lambda x: (x == "Non").mean() * 100
+
+age_stats = df.groupby("Tranche_Age").agg(agg_dict_age).reset_index()
+
+if "Statut_Vaccinal" in age_stats.columns:
+    age_stats.columns = ["Tranche_Age", "Nombre_Cas", "Pct_Non_Vaccines"]
+else:
+    age_stats.columns = ["Tranche_Age", "Nombre_Cas"]
+    age_stats["Pct_Non_Vaccines"] = 0
 
 col1, col2 = st.columns(2)
 
@@ -1225,17 +1244,20 @@ with col1:
     st.plotly_chart(fig_age, use_container_width=True)
 
 with col2:
-    fig_vacc_age = px.bar(
-        age_stats,
-        x="Tranche_Age",
-        y="Pct_Non_Vaccines",
-        title="% non vaccinés par âge",
-        color="Pct_Non_Vaccines",
-        color_continuous_scale="Oranges",
-        text="Pct_Non_Vaccines"
-    )
-    fig_vacc_age.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-    st.plotly_chart(fig_vacc_age, use_container_width=True)
+    if "Pct_Non_Vaccines" in age_stats.columns and age_stats["Pct_Non_Vaccines"].sum() > 0:
+        fig_vacc_age = px.bar(
+            age_stats,
+            x="Tranche_Age",
+            y="Pct_Non_Vaccines",
+            title="% non vaccinés par âge",
+            color="Pct_Non_Vaccines",
+            color_continuous_scale="Oranges",
+            text="Pct_Non_Vaccines"
+        )
+        fig_vacc_age.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+        st.plotly_chart(fig_vacc_age, use_container_width=True)
+    else:
+        st.info("ℹ️ Données de vaccination non disponibles")
 
 # Nowcasting
 st.subheader("⏱️ Nowcasting - Correction des Délais de Notification")

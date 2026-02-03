@@ -710,7 +710,6 @@ def worldpop_children_stats(_sa_gdf, use_gee):
         dataset = ee.ImageCollection("WorldPop/GP/100m/pop_age_sex")
         pop_img = dataset.mosaic()
         
-        # Bandes enfants 0-14 ans
         male_bands = ["M_0", "M_1", "M_5", "M_10"]
         female_bands = ["F_0", "F_1", "F_5", "F_10"]
         
@@ -718,23 +717,24 @@ def worldpop_children_stats(_sa_gdf, use_gee):
         selected_females = pop_img.select(female_bands)
         total_pop = pop_img.select(['population'])
         
-        # ========== CALCUL DES SOMMES PAR SEXE ==========
+        # ========== CALCUL DES SOMMES ==========
         males_sum = selected_males.reduce(ee.Reducer.sum()).rename('garcons')
         females_sum = selected_females.reduce(ee.Reducer.sum()).rename('filles')
+        
+        # IMPORTANT : enfants = addition MATHÉMATIQUE (pas addBands)
         enfants = males_sum.add(females_sum).rename('enfants')
-        # ================================================
+        # ========================================
         
         # ========== MOSAÏQUE FINALE ==========
-        # Option 1 (recommandée) : Garder population totale + détails enfants
-        #final_mosaic = total_pop.addBands(males_sum).addBands(females_sum).addBands(enfants)
+        # Option 1 : Garder population totale + détails enfants (RECOMMANDÉ)
+        final_mosaic = total_pop.addBands(males_sum).addBands(females_sum).addBands(enfants)
         
-        # Option 2 (si vous voulez SEULEMENT enfants, décommentez) :
-        final_mosaic = males_sum.addBands(females_sum)
+        # Option 2 : SEULEMENT enfants et répartition (votre version actuelle)
+        # final_mosaic = males_sum.addBands(females_sum).addBands(enfants)
         # =====================================
         
         # Conversion densité → compte absolu
-        # WorldPop stocke personnes/pixel, on multiplie par aire du pixel
-        pixel_area = ee.Image.pixelArea().divide(10000)  # Aire en unités de 100m²
+        pixel_area = ee.Image.pixelArea().divide(10000)
         final_mosaic_count = final_mosaic.multiply(pixel_area)
         
         status_text.text("🗺️ Conversion géométries...")
@@ -759,16 +759,12 @@ def worldpop_children_stats(_sa_gdf, use_gee):
         fc = ee.FeatureCollection(features)
         
         status_text.text("🔢 Calcul statistiques zonales...")
-        
-        # ========== STATISTIQUES ZONALES (SOMME) ==========
-        # Maintenant on somme les COMPTES ABSOLUS (pas les densités)
         stats = final_mosaic_count.reduceRegions(
             collection=fc,
             reducer=ee.Reducer.sum(),
             scale=100,
             crs='EPSG:4326'
         )
-        # ==================================================
         
         status_text.text("📊 Extraction résultats...")
         stats_info = stats.getInfo()
@@ -779,12 +775,12 @@ def worldpop_children_stats(_sa_gdf, use_gee):
         for i, feat in enumerate(stats_info['features']):
             props = feat['properties']
             
-            # ========== EXTRACTION VALEURS RÉELLES ==========
+            # ========== EXTRACTION ==========
             pop_totale = props.get("population", 0)
             garcons = props.get("garcons", 0)
             filles = props.get("filles", 0)
-            enfants_total = props.get("enfants", 0)
-            # ================================================
+            enfants_total = props.get("enfants", 0)  # ✅ Maintenant cette bande EXISTE
+            # ================================
             
             data_list.append({
                 "health_area": props.get("health_area", ""),
@@ -815,6 +811,7 @@ def worldpop_children_stats(_sa_gdf, use_gee):
             "Pop_Filles": [np.nan] * len(_sa_gdf),
             "Pop_Enfants": [np.nan] * len(_sa_gdf)
         })
+
 
 # GHSL - Classification urbaine
 @st.cache_data
